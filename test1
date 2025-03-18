@@ -1,0 +1,14 @@
+// After loading the assembly
+var type = asm.GetType("Seatbelt.Program");
+var method = type.GetMethod("Main", BindingFlags.Static | BindingFlags.Public);
+
+while (true)
+{
+    Console.Write("Seatbelt> ");
+    var command = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(command) || command.ToLower() == "exit")
+        break;
+
+    // Invoke the Main method with the user's command
+    method.Invoke(null, new object[] { new string[] { command } });
+}
