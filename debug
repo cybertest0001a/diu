@@ -50,3 +50,45 @@ Received 1799 bytes of encrypted data (total: 1799)
 First 5 bytes (hex): 17 03 03 07 02
 Decrypting message...
 DecryptMessage failed: 0x80090308
+
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\imm32.dll'. Symbol loading disabled by Include/Exclude setting.
+HTTP Request: GET / HTTP/1.1
+Host: www.google.com
+Connection: close
+Cache-Control: no-cache
+Pragma: no-cache
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36
+
+Initializing Winsock...
+Winsock initialized successfully
+Resolving hostname...
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\mswsock.dll'. Symbol loading disabled by Include/Exclude setting.
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\dnsapi.dll'. Symbol loading disabled by Include/Exclude setting.
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\nsi.dll'. Symbol loading disabled by Include/Exclude setting.
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\FWPUCLNT.DLL'. Symbol loading disabled by Include/Exclude setting.
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\rasadhlp.dll'. Symbol loading disabled by Include/Exclude setting.
+Hostname resolved successfully
+Resolved IP: 64.233.180.103
+Resolved IP: 64.233.180.105
+Resolved IP: 64.233.180.99
+Resolved IP: 64.233.180.106
+Resolved IP: 64.233.180.104
+Resolved IP: 64.233.180.147
+Creating socket and connecting...
+Connected to server successfully
+Acquiring credentials handle...
+'OneDriveSetup.exe' (Win32): Loaded 'C:\Windows\System32\schannel.dll'. Symbol loading disabled by Include/Exclude setting.
+Credentials handle acquired
+Initializing security context (first call)...
+Security context initialized (first call)
+Sending initial handshake message...
+Sent initial handshake message
+Receiving handshake response...
+Received 2824 bytes during handshake
+Processing handshake response...
+SSL handshake continuing...
+Receiving handshake response...
+Received 1186 bytes during handshake
+Processing handshake response...
+InitializeSecurityContext (subsequent call) failed: 0x80090308
+'OneDriveSetup.exe' (Win32): Unloaded 'C:\Windows\System32\FWPUCLNT.DLL'
