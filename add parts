@@ -1,0 +1,77 @@
+// Receive handshake response
+    do {
+        iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
+        if (iResult <= 0) {
+            OutputDebugStringA("SSL handshake recv failed\n");
+            goto Cleanup;
+        }
+        sslBufLen += iResult;
+
+        inBuffers[0].pvBuffer = sslBuf;
+        inBuffers[0].cbBuffer = sslBufLen;
+        inBuffers[0].BufferType = SECBUFFER_TOKEN;
+        inBuffers[1].pvBuffer = NULL;
+        inBuffers[1].cbBuffer = 0;
+        inBuffers[1].BufferType = SECBUFFER_EMPTY;
+        inBuffer.cBuffers = 2;
+        inBuffer.pBuffers = inBuffers;
+        inBuffer.ulVersion = SECBUFFER_VERSION;
+
+        outBuffers[0].pvBuffer = NULL;
+        outBuffers[0].cbBuffer = 0;
+        outBuffers[0].BufferType = SECBUFFER_TOKEN;
+
+        secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
+        if (secStatus == SEC_E_OK || secStatus == SEC_I_CONTINUE_NEEDED) {
+            if (outBuffers[0].pvBuffer) {
+                iResult = send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
+                FreeContextBuffer(outBuffers[0].pvBuffer);
+                if (iResult == SOCKET_ERROR) {
+                    OutputDebugStringA("SSL handshake continuation failed\n");
+                    goto Cleanup;
+                }
+            }
+            sslBufLen = 0;  // Reset buffer for next iteration
+        }
+    } while (secStatus == SEC_I_CONTINUE_NEEDED);
+
+    if (secStatus != SEC_E_OK) {
+        OutputDebugStringA("SSL handshake failed\n");
+        goto Cleanup;
+    }
+
+    // Encrypt and send the HTTP request
+    SecPkgContext_StreamSizes sizes;
+    QueryContextAttributesA(&hContext, SECPKG_ATTR_STREAM_SIZES, &sizes);
+    encryptedBuf = (char*)malloc(sizes.cbMaximumMessage);
+    if (!encryptedBuf) {
+        OutputDebugStringA("malloc failed\n");
+        goto Cleanup;
+    }
+    bufs[0].cbBuffer = strlen(sendbuf);
+    bufs[0].BufferType = SECBUFFER_DATA;
+    bufs[0].pvBuffer = sendbuf;
+    bufs[1].cbBuffer = 0;
+    bufs[1].BufferType = SECBUFFER_EMPTY;
+    bufs[2].cbBuffer = 0;
+    bufs[2].BufferType = SECBUFFER_EMPTY;
+    bufs[3].cbBuffer = 0;
+    bufs[3].BufferType = SECBUFFER_EMPTY;
+    message.ulVersion = SECBUFFER_VERSION;
+    message.cBuffers = 4;
+    message.pBuffers = bufs;
+
+    secStatus = EncryptMessage(&hContext, 0, &message, 0);
+    if (secStatus != SEC_E_OK) {
+        OutputDebugStringA("EncryptMessage failed\n");
+        goto Cleanup;
+    }
+
+    iResult = send(ConnectSocket, (char*)bufs[0].pvBuffer, bufs[0].cbBuffer, 0);
+    if (iResult == SOCKET_ERROR) {
+        OutputDebugStringA("send failed\n");
+        goto Cleanup;
+    }
+
+    // Receive and decrypt the response
+    sslBufLen = 0;
